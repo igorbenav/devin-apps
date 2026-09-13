@@ -7,13 +7,6 @@ from crudauth.exceptions import ForbiddenException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.common.exceptions import ValidationError
-from src.modules.platform.constants import (
-    ANALYST_PERMISSIONS,
-    PERM_KYC_APPROVE,
-    PERM_KYC_ESCALATE,
-    PERM_KYC_REVIEW,
-    REVIEWER_PERMISSIONS,
-)
 from src.modules.platform.crud import crud_audit_events
 from src.modules.platform.dependencies import ViewerContext, require_page_permission
 from src.modules.tools.kyc import service
@@ -25,12 +18,13 @@ from src.modules.tools.kyc.models import (
     STATE_PENDING,
     STATE_REJECTED,
 )
+from src.modules.tools.kyc.permissions import PERM_KYC_APPROVE, PERM_KYC_ESCALATE, PERM_KYC_REVIEW
 from src.modules.tools.kyc.schemas import KycCaseCreate, KycCaseRead
 
 pytestmark = pytest.mark.asyncio
 
-ANALYST = set(ANALYST_PERMISSIONS)
-REVIEWER = set(REVIEWER_PERMISSIONS)
+ANALYST = {PERM_KYC_REVIEW}
+REVIEWER = {PERM_KYC_REVIEW, PERM_KYC_APPROVE, PERM_KYC_ESCALATE}
 REASON = "Documents verified against the company registry"
 
 

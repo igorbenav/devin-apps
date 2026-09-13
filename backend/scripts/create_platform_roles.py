@@ -20,7 +20,7 @@ from src.infrastructure.database.session import local_session  # noqa: E402
 from src.infrastructure.logging import get_logger  # noqa: E402
 from src.modules.common.exceptions import UserExistsError  # noqa: E402
 from src.modules.platform import service as platform_service  # noqa: E402
-from src.modules.platform.constants import ROLE_ADMIN, ROLE_ANALYST, ROLE_REVIEWER, SEEDED_ROLES  # noqa: E402
+from src.modules.platform.constants import ROLE_ADMIN, ROLE_ANALYST, ROLE_REVIEWER, seeded_roles  # noqa: E402
 from src.modules.user.schemas import UserCreate  # noqa: E402
 from src.modules.user.service import UserService  # noqa: E402
 
@@ -57,7 +57,7 @@ async def create_platform_roles() -> None:
     user_service = UserService()
 
     async with local_session() as db:
-        for name, (description, permissions) in SEEDED_ROLES.items():
+        for name, (description, permissions) in seeded_roles().items():
             await platform_service.upsert_role(db, None, name, description, list(permissions))
             logger.info(f"Role '{name}' seeded with {len(permissions)} permissions")
 

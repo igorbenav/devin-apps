@@ -1,6 +1,6 @@
 """HTML routes for the << label >> tool.
 
-Mounted by the platform at the ToolSpec's ``route_prefix``; every route is
+Mounted by the platform at the manifest's ``route_prefix``; every route is
 behind the tool's permission, and no route writes directly — they call
 ``service``.
 """
@@ -9,22 +9,20 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, Request
 
-from ....infrastructure.dependencies import AsyncSessionDep
-from ...platform.dependencies import ViewerContext, require_page_permission
-from ...platform.templating import render
+from ....platform_sdk import AsyncSessionDep, ViewerContext, get_tool, render, require_page_permission
 from . import service
-from .tool import SPEC
+from .permissions import REQUIRED_PERMISSION, SLUG
 
 router = APIRouter(include_in_schema=False)
 
-ViewerDep = Annotated[ViewerContext, Depends(require_page_permission(SPEC.required_permission))]
+ViewerDep = Annotated[ViewerContext, Depends(require_page_permission(REQUIRED_PERMISSION))]
 
 
 @router.get("")
 async def list_page(request: Request, db: AsyncSessionDep, viewer: ViewerDep) -> Any:
     """List page."""
     items = await service.list_items(db)
-    return render(request, "<< slug >>/list.html", viewer=viewer, context={"items": items, "tool": SPEC})
+    return render(request, "<< slug >>/list.html", viewer=viewer, context={"items": items, "tool": get_tool(SLUG)})
 
 
 @router.post("")
@@ -44,7 +42,7 @@ async def create_item(
 async def detail_page(request: Request, db: AsyncSessionDep, viewer: ViewerDep, item_id: int) -> Any:
     """Detail page for one item."""
     item = await service.get_item(db, item_id)
-    return render(request, "<< slug >>/detail.html", viewer=viewer, context={"item": item, "tool": SPEC})
+    return render(request, "<< slug >>/detail.html", viewer=viewer, context={"item": item, "tool": get_tool(SLUG)})
 
 
 @router.post("/{item_id}/complete")

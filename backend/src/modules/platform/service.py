@@ -8,9 +8,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..api_keys.crud import crud_api_keys, crud_key_permissions
+from ..api_keys.enums import KeyPermissionAction, KeyPermissionResource
+from ..api_keys.schemas import APIKeyCreate, KeyPermissionCreate
+from ..api_keys.service import APIKeyService
 from ..common.exceptions import ResourceNotFoundError
+from ..user.models import User
 from . import audit
-from .constants import ALL_PERMISSIONS, AUDIT_PAGE_SIZE
+from .constants import AUDIT_PAGE_SIZE, permission_names
 from .models import AuditEvent, Role, UserRole
 
 
@@ -32,10 +37,54 @@ async def get_permissions_for_user(db: AsyncSession, user_id: int, *, is_superus
     platform.
     """
     if is_superuser:
-        return set(ALL_PERMISSIONS)
+        return set(permission_names())
 
     roles = await get_roles_for_user(db, user_id)
     return {permission for role in roles for permission in role.permissions}
+
+
+async def usernames_for_ids(db: AsyncSession, ids: set[int]) -> dict[int, str]:
+    """Map user ids to usernames, so a tool can show who holds a record.
+
+    Exposed through ``platform_sdk`` so tools never import the user module.
+    """
+    if not ids:
+        return {}
+
+    result = await db.execute(select(User.id, User.username).where(User.id.in_(ids)))
+    return {row.id: row.username for row in result}
+
+
+async def user_id_by_username(db: AsyncSession, username: str) -> int | None:
+    """The id of a user by username, or ``None`` — for demo seeds that assign records."""
+    result = await db.execute(select(User.id).where(User.username == username))
+    user_id = result.scalar_one_or_none()
+    return int(user_id) if user_id is not None else None
+
+
+async def issue_api_key(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    name: str,
+    resource: KeyPermissionResource,
+    action: KeyPermissionAction,
+) -> str | None:
+    """Mint an API key scoped to one resource/action, or ``None`` if that name exists.
+
+    The plaintext key is returned once and never stored; callers print it. Tools
+    reach this through ``platform_sdk`` rather than the api-keys module.
+    """
+    if await crud_api_keys.exists(db=db, user_id=user_id, name=name):
+        return None
+
+    created = await APIKeyService().create_api_key(user_id=user_id, key_data=APIKeyCreate(name=name), db=db)
+    await crud_key_permissions.create(
+        db=db,
+        object=KeyPermissionCreate(api_key_id=int(created["id"]), resource=resource, action=action),
+    )
+    await db.commit()
+    return str(created["api_key"])
 
 
 async def get_role_by_name(db: AsyncSession, name: str) -> Role:

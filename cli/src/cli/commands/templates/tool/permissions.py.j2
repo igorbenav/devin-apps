@@ -1,0 +1,16 @@
+"""The permissions this tool owns.
+
+Declared here, collected into the app-wide catalog through the ``ToolSpec`` in
+``tool.py``. Kept in its own module so routes and services can import the
+strings without importing ``tool.py``, which imports them.
+"""
+
+from typing import Final
+
+from ....platform_sdk import Permission
+
+SLUG: Final = "<< slug >>"
+
+REQUIRED_PERMISSION: Final = "<< permission >>"
+
+PERMISSIONS: Final[tuple[Permission, ...]] = (Permission(REQUIRED_PERMISSION, "Open the << label >> tool"),)

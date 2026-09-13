@@ -13,11 +13,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...common.exceptions import ResourceExistsError, ResourceNotFoundError, ValidationError
-from ...platform import audit
-from ...platform.constants import PERM_FLAGS_WRITE
+from ....platform_sdk import ResourceExistsError, ResourceNotFoundError, ValidationError, audit
 from .crud import crud_flags
 from .models import Flag
+from .permissions import PERM_FLAGS_WRITE
 from .schemas import FlagCreate, FlagRead, FlagUpdate
 
 ENTITY_TYPE = "feature_flag"

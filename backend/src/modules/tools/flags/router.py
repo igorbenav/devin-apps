@@ -12,17 +12,20 @@ from typing import Annotated, Any
 from crudauth.exceptions import ForbiddenException
 from fastapi import APIRouter, Depends, Form, Request
 
-from ....infrastructure.dependencies import AsyncSessionDep
-from ...common.exceptions import DomainError
-from ...platform.constants import PERM_FLAGS_WRITE
-from ...platform.dependencies import ViewerContext, require_page_permission
-from ...platform.templating import render
+from ....platform_sdk import (
+    AsyncSessionDep,
+    DomainError,
+    ViewerContext,
+    get_tool,
+    render,
+    require_page_permission,
+)
 from . import service
-from .tool import SPEC
+from .permissions import PERM_FLAGS_READ, PERM_FLAGS_WRITE, SLUG
 
 router = APIRouter(include_in_schema=False)
 
-ViewerDep = Annotated[ViewerContext, Depends(require_page_permission(SPEC.required_permission))]
+ViewerDep = Annotated[ViewerContext, Depends(require_page_permission(PERM_FLAGS_READ))]
 
 
 def _list_context(flags: list[dict[str, Any]], total: int, viewer: ViewerContext, error: str | None = None) -> dict[str, Any]:
@@ -31,7 +34,7 @@ def _list_context(flags: list[dict[str, Any]], total: int, viewer: ViewerContext
         "total": total,
         "can_write": viewer.can(PERM_FLAGS_WRITE),
         "error": error,
-        "tool": SPEC,
+        "tool": get_tool(SLUG),
     }
 
 

@@ -15,21 +15,17 @@ from src.modules.api_keys.enums import KeyPermissionAction, KeyPermissionResourc
 from src.modules.api_keys.schemas import APIKeyValidationResponse
 from src.modules.common.exceptions import ResourceExistsError, ValidationError
 from src.modules.platform.admin import PermissionGatedView
-from src.modules.platform.constants import (
-    ADMIN_PERMISSIONS,
-    ANALYST_PERMISSIONS,
-    PERM_FLAGS_WRITE,
-    PERM_PLATFORM_ADMIN,
-)
+from src.modules.platform.constants import PERM_PLATFORM_ADMIN
 from src.modules.platform.crud import crud_audit_events
 from src.modules.platform.dependencies import ViewerContext, require_page_permission
 from src.modules.tools.flags import service
 from src.modules.tools.flags.admin import FlagAdmin
+from src.modules.tools.flags.permissions import PERM_FLAGS_READ, PERM_FLAGS_WRITE
 
 pytestmark = pytest.mark.asyncio
 
-ANALYST = set(ANALYST_PERMISSIONS)
-ADMIN = set(ADMIN_PERMISSIONS)
+ANALYST = {PERM_FLAGS_READ}
+ADMIN = {PERM_FLAGS_READ, PERM_FLAGS_WRITE, PERM_PLATFORM_ADMIN}
 
 
 def viewer_with(permissions: set[str], user: dict[str, Any] | None = None) -> ViewerContext:

@@ -5,10 +5,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.platform import service
-from src.modules.platform.constants import PERM_FLAGS_READ, PERM_KYC_REVIEW, ROLE_ANALYST
+from src.modules.platform.constants import ROLE_ANALYST
 from src.modules.platform.models import AuditEvent, UserRole
 
 pytestmark = pytest.mark.asyncio
+
+# Tool permissions used as stand-in strings: roles are just lists the platform stores.
+PERM_KYC_REVIEW = "kyc.review"
+PERM_FLAGS_READ = "flags.read"
 
 
 async def audit_actions(db: AsyncSession) -> list[str]:

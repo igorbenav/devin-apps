@@ -70,7 +70,7 @@ def new_tool(
 
     project = discover_project()
     module_dir = project.backend_dir / "src" / "modules" / "tools" / slug
-    test_file = project.backend_dir / "tests" / "unit" / "tools" / f"test_{slug}.py"
+    tests_dir = module_dir / "tests"
 
     context: dict[str, Any] = {
         "slug": slug,
@@ -86,14 +86,17 @@ def new_tool(
         module_dir / "models.py": "models.py.j2",
         module_dir / "schemas.py": "schemas.py.j2",
         module_dir / "crud.py": "crud.py.j2",
+        module_dir / "permissions.py": "permissions.py.j2",
         module_dir / "service.py": "service.py.j2",
+        module_dir / "seed.py": "seed.py.j2",
         module_dir / "router.py": "router.py.j2",
         module_dir / "admin.py": "admin.py.j2",
         module_dir / "tool.py": "tool.py.j2",
         module_dir / "templates" / slug / "list.html": "list.html.j2",
         module_dir / "templates" / slug / "detail.html": "detail.html.j2",
         module_dir / "templates" / slug / "_row.html": "_row.html.j2",
-        test_file: "test_tool.py.j2",
+        tests_dir / "__init__.py": "tests__init__.py.j2",
+        tests_dir / f"test_{slug}.py": "test_tool.py.j2",
     }
 
     existing = [path for path in targets if path.exists()]
@@ -112,25 +115,15 @@ def new_tool(
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(rendered, encoding="utf-8")
 
-    if not dry_run:
-        _ensure_package_init(project.backend_dir / "tests" / "unit" / "tools" / "__init__.py")
-
     if dry_run:
         info("")
         info("dry-run complete — no files were written.")
         return
 
     info("")
-    info(f"Tool '{slug}' generated. Two manual steps remain:")
+    info(f"Tool '{slug}' generated; routes, admin view, permission and seed register themselves. Two steps remain:")
     info(f"  1. Create the migration:  cd backend && uv run alembic revision --autogenerate -m 'add {slug} tables'")
     info("     Then read the generated migration before applying it.")
-    info(f"  2. Grant the permission:  add '{permission}' to the relevant roles in")
-    info("     backend/src/modules/platform/constants.py, then re-run scripts/create_platform_roles.py.")
-
-
-def _ensure_package_init(path: Path) -> None:
-    """Create an empty ``__init__.py`` so the generated tests are importable."""
-    if path.exists():
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("", encoding="utf-8")
+    info(f"  2. Decide who gets it:  the tool declares '{permission}' itself, but which seeded role holds it")
+    info("     is a shared decision — edit ROLE_GRANTS in backend/src/modules/platform/constants.py")
+    info("     and re-run scripts/create_platform_roles.py.")

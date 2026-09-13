@@ -6,8 +6,7 @@ percentages, deleting a retired flag — happens here.
 
 from sqladmin import ModelView
 
-from ...platform.admin import AuditedAdminView, PermissionGatedView
-from ...platform.constants import PERM_PLATFORM_ADMIN
+from ....platform_sdk import PERM_PLATFORM_ADMIN, AuditedAdminView, PermissionGatedView
 from .models import Flag
 
 

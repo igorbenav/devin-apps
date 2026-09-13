@@ -61,6 +61,13 @@ repos:
 
   - repo: local
     hooks:
+    - id: import_linter
+      name: Import contracts
+      language: system
+      entry: bash -c 'cd backend && uv run --no-sync lint-imports'
+      pass_filenames: false
+      files: ^backend/src/.*\.py$
+
     - id: unit_test
       name: Unit test
       language: system

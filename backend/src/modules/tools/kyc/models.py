@@ -6,8 +6,7 @@ from typing import Final
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ....infrastructure.database.models import TimestampMixin
-from ....infrastructure.database.session import Base
+from ....platform_sdk import Base, TimestampMixin
 
 STATE_PENDING: Final = "pending"
 STATE_IN_REVIEW: Final = "in_review"

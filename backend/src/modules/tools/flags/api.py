@@ -8,10 +8,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from ....infrastructure.dependencies import AsyncSessionDep
-from ...api_keys.dependencies import enforce_api_key_rate_limit, require_api_key
-from ...api_keys.enums import KeyPermissionAction, KeyPermissionResource
-from ...api_keys.schemas import APIKeyValidationResponse
+from ....platform_sdk import (
+    APIKeyValidationResponse,
+    AsyncSessionDep,
+    KeyPermissionAction,
+    KeyPermissionResource,
+    enforce_api_key_rate_limit,
+    require_api_key,
+)
 from . import service
 from .schemas import KEY_MAX_LENGTH, FlagEvaluation
 

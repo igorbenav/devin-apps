@@ -44,7 +44,7 @@ from src.modules.user.models import User  # noqa: E402
 
 TEST_DATABASE_URL = get_settings().DATABASE_URL
 
-backend_dir = Path(__file__).parent.parent
+backend_dir = Path(__file__).parent
 sys.path.append(str(backend_dir))
 
 
