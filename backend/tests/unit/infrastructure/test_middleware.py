@@ -28,6 +28,10 @@ def _create_app_with_middleware(
     async def static_route():
         return {"file": "logo"}
 
+    @app.get("/audit")
+    async def page_route():
+        return {"events": []}
+
     return app
 
 
@@ -52,6 +56,16 @@ async def test_static_paths_get_public_cache():
 
     assert resp.status_code == 200
     assert resp.headers["cache-control"] == "public, max-age=120"
+
+
+@pytest.mark.asyncio
+async def test_html_pages_get_no_cache():
+    app = _create_app_with_middleware(cache=True, max_age=120)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/audit")
+
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "private, no-cache, no-store, must-revalidate"
 
 
 # === SecurityHeadersMiddleware ===

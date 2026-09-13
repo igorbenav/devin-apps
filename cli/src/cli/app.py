@@ -1,4 +1,4 @@
-"""bp — root Typer application and entry point.
+"""Bp — root Typer application and entry point.
 
 Mounts in-tree command sub-apps and discovers third-party plugins.
 The shipped console script (``[project.scripts] bp``) targets
@@ -12,6 +12,7 @@ import typer
 from . import plugins as _plugins
 from .commands import deploy as _deploy_cmd
 from .commands import env as _env_cmd
+from .commands import new as _new_cmd
 
 app = typer.Typer(
     name="bp",
@@ -24,11 +25,12 @@ app = typer.Typer(
 # silently shadow a built-in by registering the same name.
 app.add_typer(_deploy_cmd.app, name="deploy", help="Generate deployment artifacts (Dockerfile, compose, nginx config).")
 app.add_typer(_env_cmd.app, name="env", help="Inspect and prepare the runtime environment.")
+app.add_typer(_new_cmd.app, name="new", help="Scaffold new application code (e.g. `bp new tool <slug>`).")
 
 
 def _mount_command_plugins() -> None:
     """Mount external Typer sub-apps registered under ``bp.commands``."""
-    builtin_names = {"deploy", "env", "feature"}
+    builtin_names = {"deploy", "env", "feature", "new"}
     for name, sub_app in _plugins.discover_command_plugins().items():
         if name in builtin_names:
             typer.secho(
@@ -45,7 +47,7 @@ _mount_command_plugins()
 
 @app.callback()
 def _root() -> None:
-    """bp — FastAPI-boilerplate command-line tool."""
+    """Bp — FastAPI-boilerplate command-line tool."""
     # Typer uses this docstring as the root help text. The body is
     # intentionally empty: the callback exists so options like
     # ``--install-completion`` work without arguments.

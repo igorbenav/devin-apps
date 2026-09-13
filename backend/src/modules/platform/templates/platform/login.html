@@ -1,0 +1,25 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Sign in — Internal Tools{% endblock %}
+
+{% block content %}
+<div class="card login-card">
+  <h1>Internal Tools</h1>
+  <p class="muted">Sign in with your work account.</p>
+
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next }}" />
+    <label for="username">Username or email</label>
+    <input id="username" name="username" autocomplete="username" autofocus required />
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required />
+    <button type="submit">Sign in</button>
+  </form>
+
+  <p class="muted small">
+    Single sign-on: <a href="/api/v1/auth/oauth/google/login">Continue with Google</a>
+  </p>
+</div>
+{% endblock %}

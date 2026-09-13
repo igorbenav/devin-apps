@@ -7,6 +7,7 @@ sys.path.append(str(backend_dir))
 
 from scripts.create_first_superuser import create_first_superuser  # noqa: E402
 from scripts.create_first_tier import create_first_tier  # noqa: E402
+from scripts.create_platform_roles import create_platform_roles  # noqa: E402
 from src.infrastructure.database.initialize import close_database  # noqa: E402
 from src.infrastructure.database.session import create_tables  # noqa: E402
 from src.infrastructure.logging import get_logger  # noqa: E402
@@ -15,11 +16,12 @@ logger = get_logger()
 
 
 async def setup_initial_data() -> None:
-    """
-    Setup initial data for the application, including:
+    """Setup initial data for the application, including:
+
     - Create database tables
     - Create default tier
     - Create admin superuser
+    - Create platform roles and demo users
     """
     logger.info("Setting up initial data...")
 
@@ -36,6 +38,9 @@ async def setup_initial_data() -> None:
 
     logger.info("Creating superuser...")
     await create_first_superuser()
+
+    logger.info("Creating platform roles and demo users...")
+    await create_platform_roles()
 
     logger.info("Initial data setup complete")
 

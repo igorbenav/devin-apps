@@ -1,0 +1,30 @@
+{% extends "platform/base.html" %}
+
+{% block title %}<< label >> — Internal Tools{% endblock %}
+
+{% block content %}
+<h1><< label >></h1>
+<p class="muted small"><< description >></p>
+
+<form class="filters" hx-post="/tools/<< slug >>" hx-target="#<< slug >>-rows" hx-swap="afterbegin" hx-on::after-request="this.reset()">
+  <label for="title">New item</label>
+  <input id="title" name="title" type="text" required placeholder="Title" />
+  <button class="button" type="submit">Create</button>
+</form>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Title</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="<< slug >>-rows">
+    {% for item in items %}
+    {% include "<< slug >>/_row.html" %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

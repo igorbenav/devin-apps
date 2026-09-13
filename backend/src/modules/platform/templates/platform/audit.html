@@ -1,0 +1,36 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Audit log — Internal Tools{% endblock %}
+
+{% block content %}
+<h1>Audit log</h1>
+<p class="muted small">The most recent {{ events|length }} events. This table is append-only.</p>
+
+<form class="filters" hx-get="/audit/rows" hx-target="#audit-rows" hx-trigger="change">
+  <label for="entity_type">Entity type</label>
+  <select id="entity_type" name="entity_type">
+    <option value="">All</option>
+    {% for entity_type in entity_types %}
+    <option value="{{ entity_type }}" {% if entity_type == selected_entity_type %}selected{% endif %}>{{ entity_type }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>When</th>
+      <th>Actor</th>
+      <th>Action</th>
+      <th>Entity</th>
+      <th>Before</th>
+      <th>After</th>
+      <th>Request</th>
+      <th>IP</th>
+    </tr>
+  </thead>
+  <tbody id="audit-rows">
+    {% include "platform/_audit_rows.html" %}
+  </tbody>
+</table>
+{% endblock %}

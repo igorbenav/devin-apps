@@ -8,6 +8,7 @@ from ..infrastructure.app_factory import create_application, lifespan_factory
 from ..infrastructure.config.settings import get_settings
 from ..infrastructure.security import validate_production_security
 from ..interfaces.api import router
+from ..modules.platform.setup import setup_platform
 from .admin.initialize import create_admin_interface
 
 settings = get_settings()
@@ -19,7 +20,10 @@ async def lifespan_with_security(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.PRODUCTION_SECURITY_VALIDATION_ENABLED:
         validate_production_security(settings)
 
-    default_lifespan = lifespan_factory(settings)
+    default_lifespan = lifespan_factory(
+        settings,
+        create_tables_on_startup=settings.CREATE_TABLES_ON_STARTUP,
+    )
 
     async with default_lifespan(app):
         yield
@@ -65,6 +69,7 @@ app = create_application(
 )
 
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+setup_platform(app)
 create_admin_interface(app)
 
 

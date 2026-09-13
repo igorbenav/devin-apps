@@ -1,0 +1,24 @@
+"""Tables owned by the << label >> tool."""
+
+from sqlalchemy import Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from ....infrastructure.database.models import TimestampMixin
+from ....infrastructure.database.session import Base
+
+STATUS_OPEN = "open"
+STATUS_DONE = "done"
+
+
+class << class_prefix >>Item(Base, TimestampMixin):
+    """One row of work handled by this tool. Replace with the real domain model."""
+
+    __tablename__ = "<< slug >>_item"
+
+    id: Mapped[int] = mapped_column(Integer, autoincrement=True, primary_key=True, init=False)
+    title: Mapped[str] = mapped_column(String(200), index=True)
+    notes: Mapped[str | None] = mapped_column(Text, default=None)
+    status: Mapped[str] = mapped_column(String(20), default=STATUS_OPEN, index=True)
+
+    def __repr__(self) -> str:
+        return f"<< class_prefix >>Item(id={self.id}, status={self.status})"

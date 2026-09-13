@@ -11,9 +11,11 @@ HSTS_MAX_AGE_SECONDS = 63072000
 class ClientCacheMiddleware(BaseHTTPMiddleware):
     """Set Cache-Control headers.
 
-    API endpoints get no-cache (authenticated, dynamic data).
-    Static assets get public caching with the configured max_age.
+    Static assets get public caching with the configured max_age. Everything else is treated as authenticated, dynamic
+    content and gets no-store.
     """
+
+    PUBLIC_PREFIXES = ("/static/",)
 
     def __init__(self, app: ASGIApp, max_age: int = 60) -> None:
         super().__init__(app)
@@ -21,18 +23,18 @@ class ClientCacheMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response: Response = await call_next(request)
-        if request.url.path.startswith("/api/"):
-            response.headers["Cache-Control"] = "private, no-cache, no-store, must-revalidate"
-        else:
+        if request.url.path.startswith(self.PUBLIC_PREFIXES):
             response.headers["Cache-Control"] = f"public, max-age={self.max_age}"
+        else:
+            response.headers["Cache-Control"] = "private, no-cache, no-store, must-revalidate"
         return response
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Set standard security headers on every response.
 
-    Adds X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
-    Permissions-Policy, and HSTS (production/staging only).
+    Adds X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, and HSTS (production/staging
+    only).
     """
 
     def __init__(self, app: ASGIApp, environment: str = "development") -> None:

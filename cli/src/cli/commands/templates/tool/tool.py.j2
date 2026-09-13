@@ -1,0 +1,14 @@
+"""ToolSpec for << label >> — imported by the platform registry at startup."""
+
+from ...platform.registry import ToolSpec, register
+
+SPEC = register(
+    ToolSpec(
+        name="<< label >>",
+        slug="<< slug >>",
+        description="<< description >>",
+        route_prefix="/tools/<< slug >>",
+        required_permission="<< permission >>",
+        nav_label="<< label >>",
+    )
+)
