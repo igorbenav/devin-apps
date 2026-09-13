@@ -3,6 +3,7 @@
 from sqladmin import Admin
 
 from ....modules.tools.kyc.admin import KycCaseAdmin, KycDocumentAdmin
+from ....modules.tools.flags.admin import FlagAdmin
 from .platform import AuditEventAdmin, RoleAdmin, UserRoleAdmin
 from .tiers import TierAdmin
 from .users import UserAdmin
@@ -15,6 +16,7 @@ __all__ = [
     "AuditEventAdmin",
     "KycCaseAdmin",
     "KycDocumentAdmin",
+    "FlagAdmin",
     "register_admin_views",
 ]
 
@@ -28,3 +30,4 @@ def register_admin_views(admin: Admin) -> None:
     admin.add_view(AuditEventAdmin)
     admin.add_view(KycCaseAdmin)
     admin.add_view(KycDocumentAdmin)
+    admin.add_view(FlagAdmin)

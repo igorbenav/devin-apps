@@ -1,0 +1,34 @@
+{% if error %}<p class="error small">{{ error }}</p>{% endif %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Key</th>
+      <th>Description</th>
+      <th>Rollout</th>
+      <th>State</th>
+      {% if can_write %}<th></th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for flag in flags %}
+    <tr>
+      <td class="nowrap"><code>{{ flag.key }}</code></td>
+      <td>{{ flag.description or "—" }}</td>
+      <td class="nowrap">{{ flag.rollout_percent }}%</td>
+      <td class="nowrap">
+        <span class="chip {% if not flag.enabled %}chip-muted{% endif %}">{{ "on" if flag.enabled else "off" }}</span>
+      </td>
+      {% if can_write %}
+      <td class="nowrap">
+        <button class="button" hx-post="/tools/flags/{{ flag.id }}/toggle"
+                hx-target="#flags-table" hx-swap="innerHTML">
+          {{ "Turn off" if flag.enabled else "Turn on" }}
+        </button>
+      </td>
+      {% endif %}
+    </tr>
+    {% else %}
+    <tr><td colspan="{{ 5 if can_write else 4 }}" class="empty">No flags yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

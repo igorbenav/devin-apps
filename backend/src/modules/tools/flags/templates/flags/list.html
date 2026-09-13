@@ -1,0 +1,28 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Feature Flags — Internal Tools{% endblock %}
+
+{% block content %}
+<h1>Feature Flags</h1>
+<p class="muted small">
+  Services read these through <code>GET /api/v1/flags/evaluate</code> with an API key.
+  This page is deliberately small: use <a href="/admin">SQLAdmin</a> for bulk edits, history and anything fancier.
+</p>
+
+<div id="flags-table">
+  {% include "flags/_table.html" %}
+</div>
+
+{% if can_write %}
+<form class="card flag-form" hx-post="/tools/flags" hx-target="#flags-table" hx-swap="innerHTML">
+  <h2 class="small">New flag</h2>
+  <label for="key">Key</label>
+  <input id="key" name="key" placeholder="checkout.new-risk-engine" required>
+  <label for="description">Description</label>
+  <input id="description" name="description" placeholder="What this flag controls">
+  <label for="rollout_percent">Rollout %</label>
+  <input id="rollout_percent" name="rollout_percent" type="number" min="0" max="100" value="100">
+  <button type="submit">Create flag</button>
+</form>
+{% endif %}
+{% endblock %}
