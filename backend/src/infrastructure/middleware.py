@@ -1,11 +1,46 @@
 """Middleware components for the FastAPI application."""
 
+from urllib.parse import urlsplit
+
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
 # Two years, matching the HSTS preload-list requirement.
 HSTS_MAX_AGE_SECONDS = 63072000
+
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+
+
+class SameOriginMiddleware(BaseHTTPMiddleware):
+    """Reject state-changing requests that a browser labels as coming from another site.
+
+    crudauth's synchronizer token covers every request made with an existing session, but the routes that *create* one
+    (the browser login form, the SQLAdmin login form) have no session to bind a token to and are plain form posts, which
+    ``SameSite`` alone does not stop. Browsers attach ``Origin`` to those posts, so comparing it to this deployment's own
+    origin closes login CSRF without touching the session flow. Requests with no ``Origin`` (server-to-server callers,
+    curl) are left to the route's own authentication.
+    """
+
+    def __init__(self, app: ASGIApp, allowed_origins: list[str] | None = None) -> None:
+        super().__init__(app)
+        self.allowed_origins = {origin.rstrip("/") for origin in (allowed_origins or []) if origin != "*"}
+
+    def _is_allowed(self, request: Request, origin: str) -> bool:
+        if origin.rstrip("/") in self.allowed_origins:
+            return True
+
+        parts = urlsplit(origin)
+        host = request.headers.get("host")
+        return bool(host) and parts.netloc == host
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        origin = request.headers.get("origin")
+        if origin and request.method not in SAFE_METHODS and not self._is_allowed(request, origin):
+            return JSONResponse(status_code=403, content={"detail": "Cross-origin request rejected"})
+
+        return await call_next(request)
 
 
 class ClientCacheMiddleware(BaseHTTPMiddleware):
@@ -30,11 +65,33 @@ class ClientCacheMiddleware(BaseHTTPMiddleware):
         return response
 
 
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self'; "
+    "img-src 'self' data:; "
+    "font-src 'self'; "
+    "connect-src 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'none'; "
+    "object-src 'none'"
+)
+
+# SQLAdmin's own templates carry inline <script> and style attributes, so the strict policy would break /admin. Its
+# assets are still served from this origin; only inline execution is relaxed.
+ADMIN_CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY.replace(
+    "script-src 'self'", "script-src 'self' 'unsafe-inline'"
+).replace("style-src 'self'", "style-src 'self' 'unsafe-inline'")
+
+ADMIN_PREFIX = "/admin"
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Set standard security headers on every response.
 
-    Adds X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, and HSTS (production/staging
-    only).
+    Adds Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, and HSTS
+    (production/staging only).
     """
 
     def __init__(self, app: ASGIApp, environment: str = "development") -> None:
@@ -43,6 +100,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response: Response = await call_next(request)
+        path = request.url.path
+        response.headers["Content-Security-Policy"] = (
+            ADMIN_CONTENT_SECURITY_POLICY
+            if path == ADMIN_PREFIX or path.startswith(f"{ADMIN_PREFIX}/")
+            else CONTENT_SECURITY_POLICY
+        )
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"

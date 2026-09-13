@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from ...infrastructure.auth.setup import auth as crud_auth
 from ...infrastructure.dependencies import AsyncSessionDep, OptionalUserDep
 from ...infrastructure.logging import get_logger
+from ...infrastructure.security import redact_identifier
 from . import service
 from .constants import AUDIT_PAGE_SIZE, PERM_AUDIT_READ
 from .dependencies import ViewerContext, ViewerDep, require_page_permission
@@ -64,7 +65,7 @@ async def login_submit(
     try:
         user = await crud_auth.authenticate_password(db, username, password, request=request)
     except Exception as exc:
-        logger.info(f"Failed browser login for '{username}': {type(exc).__name__}")
+        logger.info(f"Failed browser login for {redact_identifier(username)}: {type(exc).__name__}")
         message = "Too many attempts. Try again later." if not isinstance(exc, UnauthorizedException) else None
         return render(
             request,

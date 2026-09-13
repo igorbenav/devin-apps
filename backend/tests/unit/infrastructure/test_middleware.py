@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from src.infrastructure.middleware import ClientCacheMiddleware, SecurityHeadersMiddleware
+from src.infrastructure.middleware import ClientCacheMiddleware, SameOriginMiddleware, SecurityHeadersMiddleware
 
 
 def _create_app_with_middleware(
@@ -104,3 +104,91 @@ async def test_hsts_set_in_staging():
         resp = await client.get("/api/v1/users")
 
     assert "strict-transport-security" in resp.headers
+
+
+# === Content-Security-Policy ===
+
+
+@pytest.mark.asyncio
+async def test_csp_forbids_inline_script_outside_admin():
+    app = _create_app_with_middleware(security=True)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/audit")
+
+    policy = resp.headers["content-security-policy"]
+    assert "script-src 'self';" in policy
+    assert "unsafe-inline" not in policy
+    assert "frame-ancestors 'none'" in policy
+
+
+@pytest.mark.asyncio
+async def test_csp_relaxes_inline_script_for_sqladmin():
+    app = _create_app_with_middleware(security=True)
+
+    @app.get("/admin/role/list")
+    async def admin_route():
+        return {"rows": []}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/admin/role/list")
+
+    assert "script-src 'self' 'unsafe-inline'" in resp.headers["content-security-policy"]
+
+
+# === SameOriginMiddleware ===
+
+
+def _same_origin_app(allowed_origins: list[str] | None = None) -> FastAPI:
+    app = FastAPI()
+    app.add_middleware(SameOriginMiddleware, allowed_origins=allowed_origins or [])
+
+    @app.post("/login")
+    async def login():
+        return {"ok": True}
+
+    @app.get("/login")
+    async def login_page():
+        return {"ok": True}
+
+    return app
+
+
+@pytest.mark.asyncio
+async def test_cross_origin_post_is_rejected():
+    async with AsyncClient(transport=ASGITransport(app=_same_origin_app()), base_url="http://test") as client:
+        resp = await client.post("/login", headers={"Origin": "http://evil.example"})
+
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_same_origin_post_is_allowed():
+    async with AsyncClient(transport=ASGITransport(app=_same_origin_app()), base_url="http://test") as client:
+        resp = await client.post("/login", headers={"Origin": "http://test"})
+
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_configured_origin_is_allowed():
+    app = _same_origin_app(["https://tools.example.com"])
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/login", headers={"Origin": "https://tools.example.com"})
+
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_request_without_origin_is_left_alone():
+    async with AsyncClient(transport=ASGITransport(app=_same_origin_app()), base_url="http://test") as client:
+        resp = await client.post("/login")
+
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_cross_origin_get_is_allowed():
+    async with AsyncClient(transport=ASGITransport(app=_same_origin_app()), base_url="http://test") as client:
+        resp = await client.get("/login", headers={"Origin": "http://evil.example"})
+
+    assert resp.status_code == 200

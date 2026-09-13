@@ -25,7 +25,7 @@ from .models import (
     STATE_PENDING,
     STATE_REJECTED,
 )
-from .schemas import REASON_MIN_LENGTH, KycCaseRead, KycCaseUpdate, KycDocumentRead
+from .schemas import REASON_MAX_LENGTH, REASON_MIN_LENGTH, KycCaseRead, KycCaseUpdate, KycDocumentRead
 
 ENTITY_TYPE = "kyc_case"
 
@@ -54,6 +54,8 @@ def _require_reason(reason: str | None) -> str:
     cleaned = (reason or "").strip()
     if len(cleaned) < REASON_MIN_LENGTH:
         raise ValidationError(f"A reason of at least {REASON_MIN_LENGTH} characters is required")
+    if len(cleaned) > REASON_MAX_LENGTH:
+        raise ValidationError(f"A reason may be at most {REASON_MAX_LENGTH} characters")
     return cleaned
 
 

@@ -16,6 +16,7 @@ from ...infrastructure.auth.setup import auth as crud_auth
 from ...infrastructure.config.settings import get_settings
 from ...infrastructure.database.session import local_session
 from ...infrastructure.logging import get_logger
+from ...infrastructure.security import redact_identifier
 from ...modules.platform.constants import PERM_PLATFORM_ADMIN
 from ...modules.platform.service import get_permissions_for_user
 
@@ -57,7 +58,7 @@ class AdminAuth(AuthenticationBackend):
             try:
                 user = await crud_auth.authenticate_password(db, username, password, request=request)
             except Exception as exc:
-                logger.info(f"Failed admin login for '{username}': {type(exc).__name__}")
+                logger.info(f"Failed admin login for {redact_identifier(username)}: {type(exc).__name__}")
                 return False
 
             user_id = int(crud_auth.repo.user_id(user))

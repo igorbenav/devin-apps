@@ -28,7 +28,7 @@ from .config.settings import (
 )
 from .database.initialize import close_database
 from .database.session import create_tables
-from .middleware import ClientCacheMiddleware, SecurityHeadersMiddleware
+from .middleware import ClientCacheMiddleware, SameOriginMiddleware, SecurityHeadersMiddleware
 from .rate_limit.initialize import close_rate_limiter, initialize_rate_limiter
 from .rate_limit.middleware import RateLimiterMiddleware
 
@@ -118,7 +118,8 @@ def create_application(
     elif hasattr(settings, "CORS_ENABLED"):
         _enable_cors = settings.CORS_ENABLED
 
-    _cors_origins: list[str] = ["*"]
+    # No origin by default: a deployment that never configures CORS should allow none, not all.
+    _cors_origins: list[str] = []
     if cors_origins is not None:
         _cors_origins = cors_origins
     elif hasattr(settings, "CORS_ORIGINS_LIST"):
@@ -298,6 +299,8 @@ def create_application(
     if _enable_gzip:
         gzip_min_size = getattr(settings, "GZIP_MINIMUM_SIZE", 1000) if hasattr(settings, "GZIP_MINIMUM_SIZE") else 1000
         application.add_middleware(GZipMiddleware, minimum_size=gzip_min_size)
+
+    application.add_middleware(SameOriginMiddleware, allowed_origins=_cors_origins if _enable_cors else [])
 
     _security_headers_enabled = getattr(settings, "SECURITY_HEADERS_ENABLED", True)
     if _security_headers_enabled:
