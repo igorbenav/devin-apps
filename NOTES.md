@@ -395,3 +395,26 @@ from moving permissions and seeds into the modules, not into the collection loop
 - **Sizing is in Devin sessions, not calendar time**, and slices A/B/G are called out as the
   compounding ones. Nothing here was implemented; the next session should pick slices, not the
   whole list.
+
+## Devin operating model (which product features to actually turn on)
+
+`DEVIN-OPERATING-MODEL.md` is the other half of the UX work: configuration and one buildable
+feature, not screens. Notes on it:
+
+- **Feature claims were checked against the Devin docs, not recalled.** Automations (GitHub issue /
+  issue-comment / check-run / schedule triggers, with narrow conditions), playbooks, repo-pinned
+  knowledge, Devin Review + Auto-Fix, code scans, session tags and `max_acu_limit`, and
+  `POST /v1/sessions` with `playbook_id`/`tags` all exist as described. Anything I could not verify
+  is not in the document.
+- **Mobile dropped from v1** at the customer's instruction; `UX.md` still lists it as P3 so the
+  decision is visible rather than lost.
+- **The one thing worth building is the in-app intake** (tool-request form → Devin API session,
+  report-issue button → labelled GitHub issue → automation). It is the only piece that answers
+  "can an ops lead get a tool without filing a ticket with the platform team", which is the actual
+  Power Apps value proposition. Flagged as needing a server-side API key, a `tools.request`
+  permission and a rate limit — it is the one endpoint in the app that spends money.
+- **Per-tool session tagging is called out as a day-one decision** because cost per tool cannot be
+  reconstructed retroactively, and it is the number that decides whether this was worth it.
+- **The honest-limits section is deliberately blunt**: latency versus a WYSIWYG editor, no end-user
+  editing, no connector ecosystem, a human still merges, variable cost instead of a licence, and
+  the fact that maintenance of the shared layer becomes the customer's liability.
