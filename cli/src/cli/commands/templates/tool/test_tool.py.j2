@@ -1,0 +1,57 @@
+"""Unit tests for the << label >> tool: permission gate and state transition."""
+
+from typing import Any
+
+import pytest
+from crudauth.exceptions import ForbiddenException
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.modules.common.exceptions import ValidationError
+from src.modules.platform.crud import crud_audit_events
+from src.modules.platform.dependencies import ViewerContext, require_page_permission
+from src.modules.tools.<< slug >> import service
+from src.modules.tools.<< slug >>.models import STATUS_DONE, STATUS_OPEN
+
+pytestmark = pytest.mark.asyncio
+
+PERMISSION = "<< permission >>"
+
+
+def viewer_with(permissions: set[str], user: dict[str, Any] | None = None) -> ViewerContext:
+    return ViewerContext(user=user or {"id": 1, "is_superuser": False}, roles=[], permissions=permissions)
+
+
+async def test_page_permission_allows_holder() -> None:
+    dependency = require_page_permission(PERMISSION)
+    viewer = viewer_with({PERMISSION})
+
+    assert await dependency(viewer=viewer) is viewer
+
+
+async def test_page_permission_rejects_non_holder() -> None:
+    dependency = require_page_permission(PERMISSION)
+
+    with pytest.raises(ForbiddenException, match=PERMISSION):
+        await dependency(viewer=viewer_with(set()))
+
+
+async def test_complete_item_transitions_and_audits(db_session: AsyncSession, test_user: dict) -> None:
+    created = await service.create_item(db_session, test_user, "Example item")
+
+    completed = await service.complete_item(db_session, test_user, created["id"])
+
+    assert completed["status"] == STATUS_DONE
+    events = await crud_audit_events.get_multi(db=db_session, entity_type=service.ENTITY_TYPE)
+    actions = [event["action"] for event in events["data"]]
+    assert "<< slug >>.item.completed" in actions
+
+
+async def test_complete_item_rejects_repeat(db_session: AsyncSession, test_user: dict) -> None:
+    created = await service.create_item(db_session, test_user, "Example item")
+    await service.complete_item(db_session, test_user, created["id"])
+
+    with pytest.raises(ValidationError):
+        await service.complete_item(db_session, test_user, created["id"])
+
+    item = await service.get_item(db_session, created["id"])
+    assert item["status"] != STATUS_OPEN

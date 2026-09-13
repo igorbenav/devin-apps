@@ -1,0 +1,14 @@
+{% extends "platform/base.html" %}
+
+{% block title %}<< label >> #{{ item.id }} — Internal Tools{% endblock %}
+
+{% block content %}
+<h1><< label >> #{{ item.id }}</h1>
+<p><a href="/tools/<< slug >>">Back to list</a></p>
+
+<div class="card">
+  <h2>{{ item.title }}</h2>
+  <p class="muted small">Status: <span class="chip">{{ item.status }}</span></p>
+  {% if item.notes %}<p>{{ item.notes }}</p>{% endif %}
+</div>
+{% endblock %}

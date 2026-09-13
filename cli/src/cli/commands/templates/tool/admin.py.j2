@@ -1,0 +1,30 @@
+"""SQLAdmin view for the << label >> tool."""
+
+from sqladmin import ModelView
+
+from ...platform.constants import PERM_PLATFORM_ADMIN
+from .models import << class_prefix >>Item
+
+
+class << class_prefix >>ItemAdmin(ModelView, model=<< class_prefix >>Item):
+    """Back-office view of this tool's items.
+
+    Register it in ``src/interfaces/admin/views/__init__.py`` if the tool needs
+    an admin surface; the platform does not mount tool admin views automatically.
+    """
+
+    required_permission = PERM_PLATFORM_ADMIN
+
+    name = "<< label >> Item"
+    name_plural = "<< label >> Items"
+    icon = "fa-solid fa-table-list"
+    category = "Internal Tools"
+
+    column_list = [<< class_prefix >>Item.id, << class_prefix >>Item.title, << class_prefix >>Item.status]
+    column_searchable_list = [<< class_prefix >>Item.title]
+    column_sortable_list = [<< class_prefix >>Item.id, << class_prefix >>Item.status]
+
+    can_create = False
+    can_edit = False
+    can_delete = False
+    can_view_details = True

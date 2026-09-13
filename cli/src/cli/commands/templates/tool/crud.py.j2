@@ -1,0 +1,7 @@
+"""FastCRUD instances for the << label >> tool."""
+
+from fastcrud import FastCRUD
+
+from .models import << class_prefix >>Item
+
+crud_<< slug >>_items: FastCRUD = FastCRUD(<< class_prefix >>Item)

@@ -1,0 +1,13 @@
+<tr id="<< slug >>-item-{{ item.id }}">
+  <td><a href="/tools/<< slug >>/{{ item.id }}">{{ item.id }}</a></td>
+  <td>{{ item.title }}</td>
+  <td><span class="chip">{{ item.status }}</span></td>
+  <td>
+    {% if item.status == "open" %}
+    <button class="button"
+            hx-post="/tools/<< slug >>/{{ item.id }}/complete"
+            hx-target="#<< slug >>-item-{{ item.id }}"
+            hx-swap="outerHTML">Complete</button>
+    {% endif %}
+  </td>
+</tr>

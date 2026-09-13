@@ -1,0 +1,83 @@
+"""State changes for the << label >> tool.
+
+Every function that writes lives here (routes never write), and every one of
+them records an audit event in the same transaction as the change.
+"""
+
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ...common.exceptions import ResourceNotFoundError, ValidationError
+from ...platform import audit
+from .crud import crud_<< slug >>_items
+from .models import STATUS_DONE, STATUS_OPEN
+from .schemas import << class_prefix >>ItemCreate, << class_prefix >>ItemRead
+
+ENTITY_TYPE = "<< slug >>_item"
+
+
+async def list_items(db: AsyncSession, limit: int = 100) -> list[dict[str, Any]]:
+    """The most recently created items."""
+    result = await crud_<< slug >>_items.get_multi(
+        db=db,
+        limit=limit,
+        schema_to_select=<< class_prefix >>ItemRead,
+        sort_columns="id",
+        sort_orders="desc",
+    )
+    return list(result["data"])
+
+
+async def get_item(db: AsyncSession, item_id: int) -> dict[str, Any]:
+    """One item, or :class:`ResourceNotFoundError`."""
+    item = await crud_<< slug >>_items.get(db=db, id=item_id, schema_to_select=<< class_prefix >>ItemRead)
+    if item is None:
+        raise ResourceNotFoundError(f"<< label >> item {item_id} not found")
+    return dict(item)
+
+
+async def create_item(db: AsyncSession, actor: dict[str, Any], title: str, notes: str | None = None) -> dict[str, Any]:
+    """Create an item and audit it."""
+    created = await crud_<< slug >>_items.create(
+        db=db,
+        object=<< class_prefix >>ItemCreate(title=title, notes=notes),
+        commit=False,
+        schema_to_select=<< class_prefix >>ItemRead,
+    )
+
+    await audit.record(
+        db,
+        actor,
+        "<< slug >>.item.created",
+        ENTITY_TYPE,
+        created["id"],
+        after={"title": created["title"], "status": created["status"]},
+    )
+    await db.commit()
+    return dict(created)
+
+
+async def complete_item(db: AsyncSession, actor: dict[str, Any], item_id: int) -> dict[str, Any]:
+    """Move an item from ``open`` to ``done``.
+
+    The example state transition: validate, write, audit, commit — in that
+    order, in one transaction.
+    """
+    item = await get_item(db, item_id)
+    if item["status"] != STATUS_OPEN:
+        raise ValidationError(f"Item {item_id} is {item['status']}, only {STATUS_OPEN} items can be completed")
+
+    await crud_<< slug >>_items.update(db=db, object={"status": STATUS_DONE}, id=item_id, commit=False)
+    await audit.record(
+        db,
+        actor,
+        "<< slug >>.item.completed",
+        ENTITY_TYPE,
+        item_id,
+        before={"status": item["status"]},
+        after={"status": STATUS_DONE},
+    )
+    await db.commit()
+
+    return await get_item(db, item_id)
