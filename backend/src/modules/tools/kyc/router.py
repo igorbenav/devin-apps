@@ -13,17 +13,21 @@ from typing import Annotated, Any
 from crudauth.exceptions import ForbiddenException
 from fastapi import APIRouter, Depends, Form, Request
 
-from ....infrastructure.dependencies import AsyncSessionDep
-from ...common.exceptions import DomainError
-from ...platform import service as platform_service
-from ...platform.dependencies import ViewerContext, require_page_permission
-from ...platform.templating import render
+from ....platform_sdk import (
+    AsyncSessionDep,
+    DomainError,
+    ViewerContext,
+    get_tool,
+    list_audit_events,
+    render,
+    require_page_permission,
+)
 from . import service
-from .tool import SPEC
+from .permissions import PERM_KYC_REVIEW, SLUG
 
 router = APIRouter(include_in_schema=False)
 
-ViewerDep = Annotated[ViewerContext, Depends(require_page_permission(SPEC.required_permission))]
+ViewerDep = Annotated[ViewerContext, Depends(require_page_permission(PERM_KYC_REVIEW))]
 
 Transition = Callable[[], Awaitable[dict[str, Any]]]
 
@@ -36,7 +40,7 @@ async def _case_context(
 ) -> dict[str, Any]:
     """Everything the detail panel renders: the case, its documents and its trail."""
     case = await service.get_case(db, case_id)
-    events = await platform_service.list_audit_events(db, entity_type=service.ENTITY_TYPE, entity_id=str(case_id))
+    events = await list_audit_events(db, entity_type=service.ENTITY_TYPE, entity_id=str(case_id))
     return {
         "case": case,
         "documents": await service.list_documents(db, case_id),
@@ -44,7 +48,7 @@ async def _case_context(
         "actions": service.allowed_actions(case, viewer.user, viewer.permissions),
         "events": events,
         "error": error,
-        "tool": SPEC,
+        "tool": get_tool(SLUG),
     }
 
 
@@ -106,7 +110,7 @@ async def list_page(request: Request, db: AsyncSessionDep, viewer: ViewerDep, ta
             "actions_by_case": {case["id"]: service.allowed_actions(case, viewer.user, viewer.permissions) for case in cases},
             "tab": tab,
             "tabs": service.TABS,
-            "tool": SPEC,
+            "tool": get_tool(SLUG),
         },
     )
 

@@ -6,14 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.platform import service
 from src.modules.platform.constants import (
-    ALL_PERMISSIONS,
-    ANALYST_PERMISSIONS,
-    PERM_KYC_APPROVE,
-    PERM_KYC_REVIEW,
-    REVIEWER_PERMISSIONS,
     ROLE_ANALYST,
     ROLE_REVIEWER,
-    SEEDED_ROLES,
+    permission_names,
+    seeded_roles,
 )
 from src.modules.platform.dependencies import (
     LoginRequiredError,
@@ -26,9 +22,16 @@ from src.modules.platform.dependencies import (
 
 pytestmark = pytest.mark.asyncio
 
+# Two tool permissions used as stand-ins: the platform knows nothing about them beyond what a tool declared.
+PERM_KYC_REVIEW = "kyc.review"
+PERM_KYC_APPROVE = "kyc.approve"
+
+ANALYST_PERMISSIONS = seeded_roles()[ROLE_ANALYST][1]
+REVIEWER_PERMISSIONS = seeded_roles()[ROLE_REVIEWER][1]
+
 
 async def seed_roles(db: AsyncSession) -> None:
-    for name, (description, permissions) in SEEDED_ROLES.items():
+    for name, (description, permissions) in seeded_roles().items():
         await service.upsert_role(db, None, name, description, list(permissions))
 
 
@@ -59,7 +62,7 @@ async def test_user_without_roles_holds_nothing(db_session: AsyncSession, test_u
 async def test_superuser_holds_every_permission(db_session: AsyncSession, test_user: dict) -> None:
     permissions = await service.get_permissions_for_user(db_session, test_user["id"], is_superuser=True)
 
-    assert permissions == set(ALL_PERMISSIONS)
+    assert permissions == set(permission_names())
 
 
 async def test_current_permissions_dependency_resolves_roles(db_session: AsyncSession, test_user: dict) -> None:

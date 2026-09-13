@@ -8,8 +8,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...common.exceptions import ResourceNotFoundError, ValidationError
-from ...platform import audit
+from ....platform_sdk import ResourceNotFoundError, ValidationError, audit
 from .crud import crud_<< slug >>_items
 from .models import STATUS_DONE, STATUS_OPEN
 from .schemas import << class_prefix >>ItemCreate, << class_prefix >>ItemRead

@@ -1,15 +1,30 @@
 # How to add a new internal tool
 
-Read this if you have never seen this repo. It takes you from nothing to a working internal
+Read this if you have never seen this repo: it takes you from nothing to a working internal
 tool behind login, roles, and the audit log. Expect 30–90 minutes for a simple tool.
-
-## What this repo is
 
 One repo, one deployable FastAPI app. Every internal tool is a vertical-slice module under
 `backend/src/modules/tools/<slug>/` that plugs into the shared platform in
-`backend/src/modules/platform/` (login, roles/permissions, audit log, launcher, admin). Tools
-are never separate repos or separate deployments. UI is server-rendered Jinja2 + HTMX; there
-is no JS framework and no build step.
+`backend/src/modules/platform/` (login, roles/permissions, audit log, launcher, admin). UI is
+server-rendered Jinja2 + HTMX; no JS framework, no build step.
+
+A tool is one directory, and it owns everything it contributes:
+
+```text
+backend/src/modules/tools/<slug>/
+  models.py schemas.py crud.py service.py        domain
+  permissions.py                                 the permission strings this tool owns
+  router.py  templates/<slug>/*.html             pages
+  api.py                                         optional JSON API under /api/v1
+  admin.py                                       optional SQLAdmin views
+  seed.py                                        optional demo data
+  tests/                                         unit tests, next to the code
+  tool.py                                        the manifest tying all of it together
+```
+
+Tools import the platform through one façade, `src.platform_sdk`, and nothing else of the
+platform: `uv run --no-sync lint-imports` (backend/) enforces the layering, that no tool
+imports another tool, and that the platform never imports a tool.
 
 ## 1. Generate the module
 
@@ -18,34 +33,54 @@ uv run bp new tool kyc_review --label "KYC Review" --permission kyc.review \
   --description "Review and approve pending KYC cases."
 ```
 
-This writes `backend/src/modules/tools/kyc_review/` (`models.py`, `schemas.py`, `crud.py`,
-`service.py`, `router.py`, `admin.py`, `tool.py`, `templates/kyc_review/{list,detail,_row}.html`)
-and `backend/tests/unit/tools/test_kyc_review.py`. The module registers itself on import —
-`setup_platform()` discovers it and mounts its router — so you never edit a shared file to add
-a tool. Delete the example model/service/route the generator gives you once yours replaces it.
+The generated `tool.py` is the manifest, and it is the only registration there is:
+
+```python
+SPEC = register(
+    ToolSpec(
+        name="KYC Review",
+        slug="kyc_review",
+        description="...",
+        route_prefix="/tools/kyc_review",
+        required_permission=REQUIRED_PERMISSION,
+        nav_label="KYC Review",
+        pages=router,  # mounted at route_prefix
+        api=api_router,
+        api_prefix="/kyc",  # optional, mounted under /api/v1
+        admin_views=(KycCaseAdmin,),  # optional SQLAdmin views
+        permissions=PERMISSIONS,  # collected into the app-wide catalog
+        seed=seed_demo_data,  # run by scripts/seed_tools.py
+    )
+)
+```
+
+The platform discovers the module on import and collects each field, so you never edit
+`interfaces/api/v1/__init__.py`, `interfaces/admin/views/__init__.py`, or add a seed script.
+Drop any field the tool does not need; delete the example domain once yours replaces it.
 
 ## 2. Model the domain
 
-Edit `models.py`. Follow the existing modules: SQLAlchemy 2 `Mapped`/`mapped_column`, inherit
-`Base` from `src.infrastructure.database.session`, table name prefixed with the tool slug
-(`kyc_review_case`), timestamps as `DateTime(timezone=True)` with UTC defaults. Keep status
-fields as plain strings with a small set of documented values. `schemas.py` holds the Pydantic
-v2 create/update/read schemas; `crud.py` holds one `FastCRUD(...)` object per model.
+Edit `models.py`: SQLAlchemy 2 `Mapped`/`mapped_column`, inherit `Base` from `src.platform_sdk`,
+table name prefixed with the tool slug (`kyc_review_case`), timestamps as
+`DateTime(timezone=True)` with UTC defaults, status fields as plain strings with a small set of
+documented values. `schemas.py` holds the Pydantic v2 schemas; `crud.py` one `FastCRUD(...)` per
+model.
 
 ## 3. Define permissions
 
-Permissions are flat dotted strings — no hierarchy, no implication. Add yours to
-`backend/src/modules/platform/constants.py`:
+Permissions are flat dotted strings — no hierarchy, no implication — and the tool owns them, in
+its own `permissions.py`:
 
 ```python
-PERM_KYC_REVIEW: Final = "kyc.review"
-ALL_PERMISSIONS: Final[tuple[str, ...]] = (..., PERM_KYC_REVIEW)
+REQUIRED_PERMISSION: Final = "kyc.review"
+PERMISSIONS: Final[tuple[Permission, ...]] = (Permission(REQUIRED_PERMISSION, "Open the queue"),)
 ```
 
-Then add it to the seeded roles in the same file (`ANALYST_PERMISSIONS`,
-`REVIEWER_PERMISSIONS`; `admin` gets everything automatically) and re-run
-`uv run python -m scripts.create_platform_roles` from `backend/`. Superusers pass every check
-without any role. A permission that no role holds is a permission nobody has.
+Listing them in the manifest puts them in `permission_catalog()`, which is what `admin` and
+superusers get. Which *other* seeded role holds one stays a shared decision: edit `ROLE_GRANTS`
+in `backend/src/modules/platform/constants.py` and re-run
+`uv run python -m scripts.create_platform_roles` from `backend/`. A permission no role holds is
+a permission nobody has.
 
 ## 4. Services do the writing, and audit it
 
@@ -65,30 +100,25 @@ async def approve_case(db: AsyncSession, actor: dict[str, Any], case_id: int) ->
 ```
 
 `audit.record` never commits on its own — it flushes into the caller's transaction, so a failed
-write cannot leave an audit entry behind (and vice versa). `request_id` and `ip` are picked up
-from the request context middleware. The audit table is append-only: there is no update or
-delete path, in the CRUD layer or in SQLAdmin. Do not add one.
+write cannot leave an audit entry behind (and vice versa); `request_id` and `ip` come from the
+request context middleware. The audit table is append-only, in the CRUD layer and in SQLAdmin.
+Do not add an update or delete path.
 
-## 5. Routes, templates, HTMX
+## 5. Routes, templates, HTMX, API, admin
 
-`router.py` gates pages with `require_page_permission(SPEC.required_permission)` (HTML: a 403
-renders an error page) and JSON/API routes with `require_permission("...")`. Render with
-`render(request, viewer, "kyc_review/list.html", ...)` from
-`src.modules.platform.templating`; the loader already sees both the platform templates and
-every tool's `templates/<slug>/` directory, so template names are namespaced by slug.
+`router.py` gates pages with `require_page_permission(REQUIRED_PERMISSION)` (a 403 renders an
+error page) and JSON routes in `api.py` with `require_permission("...")`. Render with
+`render(request, "kyc_review/list.html", viewer=viewer, context=...)`; the loader sees the
+platform templates and every tool's `templates/<slug>/`, so names are namespaced by slug.
 
 Pages extend `platform/base.html` (nav, current user, roles, tool list, logout). HTMX is
 vendored at `backend/src/static/js/htmx.min.js` — never a CDN. The convention for an action:
-`hx-post` to a route that performs the service call and returns a single rendered partial
-(`_row.html`) with `hx-target`/`hx-swap="outerHTML"`. Full-page reload after a mutation is a
-fallback, not the default. CSS is one hand-written file at `backend/src/static/css/platform.css`;
-add classes there rather than inline styles. No JS framework, no build step.
+`hx-post` to a route that calls the service and returns one rendered partial (`_row.html`) with
+`hx-target`/`hx-swap="outerHTML"`. CSS is one hand-written file at
+`backend/src/static/css/platform.css`. `admin.py` views subclass `PermissionGatedView` +
+`AuditedAdminView` so back-office writes are gated and audited like service writes.
 
-`admin.py` registers a SQLAdmin view for the tool's tables; `tool.py` holds the `ToolSpec`
-(name, slug, description, route prefix, required permission, nav label) that the launcher uses
-to decide whether to show your tool to a given user.
-
-## 6. Migration
+## 6. Migration and seed
 
 Autogenerate, then read it before applying it:
 
@@ -96,31 +126,34 @@ Autogenerate, then read it before applying it:
 cd backend
 uv run alembic revision --autogenerate -m "add kyc_review tables"
 uv run alembic upgrade head
+uv run python -m scripts.seed_tools     # runs every tool's seed(), yours included
 ```
 
-Check the generated file for accidental drops, missing indexes on filtered columns, and correct
-`ondelete` behaviour. Strip Alembic's boilerplate comments. One migration per tool is fine.
+Check it for accidental drops, missing indexes on filtered columns, and correct `ondelete`
+behaviour. Migrations are one shared linear chain: rebase yours if `head` moved.
 
 ## 7. Tests
 
 ```bash
-cd backend && uv run pytest tests/unit
+cd backend && uv run pytest tests/unit src/modules/tools
 ```
 
-The generated test file is the shape to keep: a permission test (holder allowed, non-holder gets
-403 with a clear message), a state-transition test asserting both the new state and the audit
-event it wrote, and a test that the invalid transition is rejected. Unit tests only — do not
-spend time on integration tests.
+Tests live in `modules/tools/<slug>/tests/` next to the code; fixtures (`db_session`,
+`test_user`, `client`) come from `backend/conftest.py`. Keep the generated shape: a permission
+test, a state-transition test asserting both the new state and the audit event it wrote, and a
+rejected invalid transition. Unit tests only — do not spend time on integration tests.
 
 ## Definition of done
 
 - `bp new tool` module replaced with your domain; no leftover example code.
-- Permission added to `constants.py` **and** to the seeded roles, seed script re-run.
+- Everything the tool contributes is in its manifest; no shared registry file was edited.
+- Permission declared in the tool, and the seeded-role decision made in `ROLE_GRANTS`.
 - Every state change goes through a service function that records an audit event in the same
   transaction; no writes in route handlers.
-- Migration generated, reviewed, applied.
-- List page, detail page, and at least one HTMX action work while logged in as a user holding
-  the permission — and the tool is invisible on the launcher for a user who does not.
-- `uv run pytest tests/unit` passes; lint/format clean (`pre-commit run --all-files`).
+- Migration generated, reviewed, applied; seed runs through `scripts/seed_tools.py`.
+- Pages and at least one HTMX action work for a user holding the permission — and the tool is
+  invisible on the launcher for a user who does not.
+- `uv run pytest tests/unit src/modules/tools`, `uv run --no-sync lint-imports` and
+  `pre-commit run --all-files` pass.
 - Anything you guessed at, decided alone, or would flag to a security reviewer is appended to
   `NOTES.md`.

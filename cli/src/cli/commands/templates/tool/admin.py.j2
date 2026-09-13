@@ -2,16 +2,15 @@
 
 from sqladmin import ModelView
 
-from ...platform.admin import AuditedAdminView, PermissionGatedView
-from ...platform.constants import PERM_PLATFORM_ADMIN
+from ....platform_sdk import PERM_PLATFORM_ADMIN, AuditedAdminView, PermissionGatedView
 from .models import << class_prefix >>Item
 
 
 class << class_prefix >>ItemAdmin(PermissionGatedView, AuditedAdminView, ModelView, model=<< class_prefix >>Item):
     """Back-office view of this tool's items.
 
-    Register it in ``src/interfaces/admin/views/__init__.py`` if the tool needs
-    an admin surface; the platform does not mount tool admin views automatically.
+    Mounted by the platform because ``tool.py`` lists it in ``admin_views``;
+    drop it from the manifest if the tool needs no admin surface.
     """
 
     required_permission = PERM_PLATFORM_ADMIN

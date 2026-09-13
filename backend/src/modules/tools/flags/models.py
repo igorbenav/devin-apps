@@ -5,8 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ....infrastructure.database.models import TimestampMixin
-from ....infrastructure.database.session import Base
+from ....platform_sdk import Base, TimestampMixin
 
 
 class Flag(Base, TimestampMixin):

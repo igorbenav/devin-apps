@@ -1,0 +1,27 @@
+"""Demo data for the << label >> tool.
+
+Called by ``scripts/seed_tools.py`` through the registry; it is idempotent, so
+re-running the seed does not duplicate rows.
+"""
+
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .crud import crud_<< slug >>_items
+from .schemas import << class_prefix >>ItemCreate
+
+DEMO_ITEMS: list[dict[str, Any]] = [
+    {"title": "First example item", "notes": "Replace with real demo data"},
+    {"title": "Second example item", "notes": None},
+]
+
+
+async def seed_demo_data(db: AsyncSession) -> None:
+    """Insert the demo rows this tool needs for a walkthrough."""
+    for item in DEMO_ITEMS:
+        if await crud_<< slug >>_items.exists(db=db, title=item["title"]):
+            continue
+        await crud_<< slug >>_items.create(db=db, object=<< class_prefix >>ItemCreate(**item), commit=False)
+
+    await db.commit()

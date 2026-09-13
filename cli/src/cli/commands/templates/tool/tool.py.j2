@@ -1,6 +1,14 @@
-"""ToolSpec for << label >> — imported by the platform registry at startup."""
+"""The << label >> manifest: everything this tool contributes to the platform.
 
-from ...platform.registry import ToolSpec, register
+The platform reads this — routers, admin views, permissions, seed — so no
+shared registry file needs editing when a tool is added or removed.
+"""
+
+from ....platform_sdk import ToolSpec, register
+from .admin import << class_prefix >>ItemAdmin
+from .permissions import PERMISSIONS, REQUIRED_PERMISSION
+from .router import router
+from .seed import seed_demo_data
 
 SPEC = register(
     ToolSpec(
@@ -8,7 +16,12 @@ SPEC = register(
         slug="<< slug >>",
         description="<< description >>",
         route_prefix="/tools/<< slug >>",
-        required_permission="<< permission >>",
+        required_permission=REQUIRED_PERMISSION,
         nav_label="<< label >>",
+        pages=router,
+        # api=api_router, api_prefix="/<< slug >>",  # add an api.py to expose JSON under /api/v1
+        admin_views=(<< class_prefix >>ItemAdmin,),
+        permissions=PERMISSIONS,
+        seed=seed_demo_data,
     )
 )

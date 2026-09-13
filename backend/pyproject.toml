@@ -43,6 +43,7 @@ dev = [
     "pytest-mock>=3.14.0",
     "testcontainers[postgres]>=4.10.0",
     "pytest-xdist[psutil]>=3.8.0",
+    "import-linter>=2.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -51,7 +52,7 @@ include = ["*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-testpaths = ["tests"]
+testpaths = ["tests", "src/modules/tools"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 python_classes = ["Test*"]
@@ -121,6 +122,41 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "taskiq_aio_pika"
 ignore_missing_imports = true
+
+[tool.importlinter]
+root_packages = ["src"]
+
+# Tools sit on top of the platform, never under it: a tool may import the SDK and the
+# infrastructure below it, but the platform must never import a tool (it discovers them
+# by name at runtime), and no tool may reach into another tool or into the interfaces layer.
+[[tool.importlinter.contracts]]
+name = "Layered architecture"
+type = "layers"
+layers = [
+    "src.interfaces",
+    "src.modules.tools",
+    "src.platform_sdk",
+    "src.modules.platform",
+    "src.infrastructure",
+]
+# Known wrong-direction import: the login/logout routes live in the infrastructure auth
+# package (crudauth builds them there) and call the platform audit service so sign-ins
+# reach the audit trail. Moving those routes up to the interfaces layer would fix it.
+ignore_imports = ["src.infrastructure.auth.routes -> src.modules.platform.service"]
+
+[[tool.importlinter.contracts]]
+name = "Tools are independent of each other"
+type = "independence"
+modules = [
+    "src.modules.tools.flags",
+    "src.modules.tools.kyc",
+]
+
+[[tool.importlinter.contracts]]
+name = "Tools do not import the interfaces layer"
+type = "forbidden"
+source_modules = ["src.modules.tools"]
+forbidden_modules = ["src.interfaces"]
 
 [tool.ruff]
 line-length = 128

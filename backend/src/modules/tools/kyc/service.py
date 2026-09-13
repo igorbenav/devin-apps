@@ -10,13 +10,9 @@ hold for any caller: a route, the seed script, or a future background job.
 from typing import Any
 
 from crudauth.exceptions import ForbiddenException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...common.exceptions import ResourceNotFoundError, ValidationError
-from ...platform import audit
-from ...platform.constants import PERM_KYC_APPROVE, PERM_KYC_ESCALATE, PERM_KYC_REVIEW
-from ...user.models import User
+from ....platform_sdk import ResourceNotFoundError, ValidationError, audit, usernames_for_ids
 from .crud import crud_kyc_cases, crud_kyc_documents
 from .models import (
     STATE_APPROVED,
@@ -25,6 +21,7 @@ from .models import (
     STATE_PENDING,
     STATE_REJECTED,
 )
+from .permissions import PERM_KYC_APPROVE, PERM_KYC_ESCALATE, PERM_KYC_REVIEW
 from .schemas import REASON_MAX_LENGTH, REASON_MIN_LENGTH, KycCaseRead, KycCaseUpdate, KycDocumentRead
 
 ENTITY_TYPE = "kyc_case"
@@ -75,11 +72,7 @@ async def get_case(db: AsyncSession, case_id: int) -> dict[str, Any]:
 async def usernames_for(db: AsyncSession, cases: list[dict[str, Any]]) -> dict[int, str]:
     """Map the user ids referenced by these cases to usernames, for display."""
     ids = {case[field] for case in cases for field in ("assigned_to", "decided_by") if case[field] is not None}
-    if not ids:
-        return {}
-
-    result = await db.execute(select(User.id, User.username).where(User.id.in_(ids)))
-    return {row.id: row.username for row in result}
+    return await usernames_for_ids(db, ids)
 
 
 async def list_documents(db: AsyncSession, case_id: int) -> list[dict[str, Any]]:
@@ -173,8 +166,7 @@ async def release_case(db: AsyncSession, actor: dict[str, Any], permissions: set
     is_assignee = case["assigned_to"] == _actor_id(actor)
     if not is_assignee and PERM_KYC_APPROVE not in permissions:
         raise ForbiddenException(
-            f"Case {case_id} is assigned to someone else; only the assignee or a user with "
-            f"'{PERM_KYC_APPROVE}' can release it"
+            f"Case {case_id} is assigned to someone else; only the assignee or a user with '{PERM_KYC_APPROVE}' can release it"
         )
 
     return await _apply(db, actor, case, "kyc.case.released", {"state": STATE_PENDING, "assigned_to": None})

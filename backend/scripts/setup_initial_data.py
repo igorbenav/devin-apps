@@ -8,10 +8,11 @@ sys.path.append(str(backend_dir))
 from scripts.create_first_superuser import create_first_superuser  # noqa: E402
 from scripts.create_first_tier import create_first_tier  # noqa: E402
 from scripts.create_platform_roles import create_platform_roles  # noqa: E402
-from scripts.seed_kyc_cases import seed_kyc_cases  # noqa: E402
+from scripts.seed_tools import seed_tools  # noqa: E402
 from src.infrastructure.database.initialize import close_database  # noqa: E402
 from src.infrastructure.database.session import create_tables  # noqa: E402
 from src.infrastructure.logging import get_logger  # noqa: E402
+from src.modules.platform.registry import discover_tools  # noqa: E402
 
 logger = get_logger()
 
@@ -23,9 +24,11 @@ async def setup_initial_data() -> None:
     - Create default tier
     - Create admin superuser
     - Create platform roles and demo users
-    - Seed the KYC review queue with demo cases
+    - Seed demo data for every registered tool
     """
     logger.info("Setting up initial data...")
+
+    discover_tools()  # tool models must be in Base.metadata before the tables are created
 
     logger.info("Creating database tables...")
     try:
@@ -44,8 +47,8 @@ async def setup_initial_data() -> None:
     logger.info("Creating platform roles and demo users...")
     await create_platform_roles()
 
-    logger.info("Seeding KYC demo cases...")
-    await seed_kyc_cases()
+    logger.info("Seeding tool demo data...")
+    await seed_tools()
 
     logger.info("Initial data setup complete")
 

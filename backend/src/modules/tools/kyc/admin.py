@@ -7,8 +7,7 @@ both, so the back office can look but not touch.
 
 from sqladmin import ModelView
 
-from ...platform.admin import PermissionGatedView
-from ...platform.constants import PERM_PLATFORM_ADMIN
+from ....platform_sdk import PERM_PLATFORM_ADMIN, PermissionGatedView
 from .models import KycCase, KycDocument
 
 

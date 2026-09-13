@@ -28,3 +28,7 @@ jobs:
         # --no-sync prevents uv run's implicit re-sync from dropping member
         # extras (it defaults to no extras and would remove ruff).
         run: uv run --no-sync ruff check backend/src cli/src backend/tests
+
+      - name: Import contracts (layering, tool independence)
+        working-directory: backend
+        run: uv run --no-sync lint-imports
