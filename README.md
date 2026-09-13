@@ -59,7 +59,8 @@ docker compose up --build
 
 # in another terminal: migrate, then seed roles + demo users.
 # The dev image ships only src/, so run these from the host against the published Postgres.
-cd backend && uv run alembic upgrade head && uv run python -m scripts.setup_initial_data
+cd backend && POSTGRES_SERVER=127.0.0.1 uv run alembic upgrade head \
+  && POSTGRES_SERVER=127.0.0.1 uv run python -m scripts.setup_initial_data
 ```
 
 The single migration in `backend/migrations/versions/` is the baseline schema (the boilerplate
