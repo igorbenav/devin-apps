@@ -188,3 +188,75 @@ is the point: the generator removes the boilerplate, not the thinking.
   `None` and FastCRUD passes the whole dict through, so the model-level `default_factory` never
   fired and every insert hit a NOT NULL violation. Defaulting in the schema, not the model, is the
   rule here.
+
+## Session 3 — feature flags (branch `tool/flags`)
+
+### Elapsed time
+
+Being blunt, because the brief says this number matters: the only clock I can measure honestly is
+the VM's, and it pauses between turns, so it undercounts. Machine-awake time from the
+`bp new tool flags` run to opening the PR was **~7 minutes** (worktree file timestamps 20:08–20:15)
+— that is compute time, not the user-visible wall time, which was longer and dominated by waiting
+on me between turns rather than by the work. What I can say without hedging: the flags tool was
+one uninterrupted work stretch with no rework and no design decisions of consequence, versus the
+KYC tool's several. Roughly: generator + domain, then service/UI, then the API-key dependency and
+evaluate endpoint, then migration + seed + a manual end-to-end run, then tests and lint.
+
+### Generator retention
+
+Kept the generated `tool.py`, `crud.py`, `admin.py`, the router's permission wiring and template
+scaffolding, and the test file's fixtures. Rewrote `models.py`, `schemas.py`, `service.py` and the
+templates for the real domain, and deleted the generated `detail.html`/`_row.html` — flags have no
+detail page; the table is the whole UI.
+
+### API-key request authentication (closes a pre-existing gap)
+
+The boilerplate shipped `APIKeyService.validate_api_key` but nothing that authenticates a request
+with an `fai_…` key: API keys were management-only. `require_api_key(resource, action)` in
+`backend/src/modules/api_keys/dependencies.py` closes that, reading the `X-API-Key` header via
+`APIKeyHeader(auto_error=False)` so the 401 body is ours. It is applied to exactly one route,
+`GET /api/v1/flags/evaluate`, per the brief.
+
+For a security reviewer:
+
+- The evaluate endpoint requires a `*`/`read` key. There is no per-flag or per-tool scoping; any
+  valid read key can evaluate any flag. Flag keys and rollout percentages are not secret, but that
+  is an assumption, not an enforced boundary.
+- `validate_api_key` updates `last_used_at` on every call, so each evaluation is a write. Fine at
+  internal-tool volume; it would need batching if services poll this endpoint hot.
+- The dependency does not rate-limit. Per the brief internal routes do not get rate limiting, but
+  this one is reachable by anything holding a key, not just a logged-in human — it is the one route
+  in the repo where I would add a limit before exposing it outside the VPC.
+- No API-key auth is applied anywhere else, deliberately. Session auth still guards the UI routes.
+
+### Decisions made without being told
+
+- Rollout bucketing is `sha256(f"{key}:{subject}")`, first 4 bytes mod 100. Including the key means
+  a subject is not in the same bucket for every flag (otherwise the same unlucky 10% of users get
+  every partial rollout). Deterministic and stable across processes — no `hash()`, which is salted.
+- `rollout_percent` is validated 0–100 in the Pydantic schemas and by a DB CHECK constraint
+  (`ck_feature_flag_rollout_percent`). The schema check is the friendly error; the constraint is
+  there because SQLAdmin and psql write to this table without going through the schemas.
+- Unknown flag keys return the repo's generic 404 error envelope rather than an
+  `{enabled: false}` body. A typo'd key should be loud, not silently false.
+- The SQLAdmin view for flags has `can_create = False`: creating a flag without going through the
+  service would skip the audit entry. Editing and deleting are still possible there and are *not*
+  audited — same hole the platform's admin surface has generally, noted in session 1.
+- The seed prints the plaintext API key once and nowhere else; it is not committed and not stored
+  in recoverable form.
+
+### Review follow-ups (same session)
+
+- `update_flag` and `toggle_flag` now read the row with `SELECT ... FOR UPDATE` before deciding what
+  to write. A toggle is a read-modify-write; two concurrent toggles both read the old value and
+  write the same inverse, so one is silently lost.
+- `create_flag` keeps the `exists` pre-check for the friendly message but also catches the unique
+  violation, so a race returns "already exists" instead of a 500.
+- `updated_at` is set by the model (`onupdate`), which covers SQLAdmin edits too, rather than by
+  each service function.
+- The permission gate for SQLAdmin views moved from `interfaces/admin/views/platform.py` to
+  `modules/platform/admin.py` so tool modules can mix it in without importing an interface layer.
+  `FlagAdmin` declared `required_permission` but did not inherit the gate, so it was inert; the
+  generator template had the same hole and now emits the mixin.
+- The seeded API key prints to stdout rather than through the logger, so a live credential does not
+  end up in aggregated application logs.

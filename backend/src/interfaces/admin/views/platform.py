@@ -1,37 +1,16 @@
 """Admin views for the platform tables."""
 
-from typing import Any, ClassVar
+from typing import Any
 
 from sqladmin import ModelView
 from starlette.requests import Request
 
+from ....modules.platform.admin import PermissionGatedView
 from ....modules.platform.constants import PERM_AUDIT_READ, PERM_PLATFORM_ADMIN
 from ....modules.platform.models import AuditEvent, Role, UserRole
 from ..mixins import DataclassModelMixin
 
-
-def _session_permissions(request: Request) -> set[str]:
-    """Permissions stashed in the admin session at login."""
-    return set(request.session.get("permissions", []))
-
-
-def _is_superuser(request: Request) -> bool:
-    """Superuser, or the configured break-glass admin (which has no platform user)."""
-    if "user_id" not in request.session:
-        return bool(request.session.get("admin_authenticated", False))
-    return bool(request.session.get("is_superuser", False))
-
-
-class PermissionGatedView:
-    """Hide and block a view unless the admin user holds ``required_permission``."""
-
-    required_permission: ClassVar[str] = PERM_PLATFORM_ADMIN
-
-    def is_visible(self, request: Request) -> bool:
-        return self.is_accessible(request)
-
-    def is_accessible(self, request: Request) -> bool:
-        return _is_superuser(request) or self.required_permission in _session_permissions(request)
+__all__ = ["AuditEventAdmin", "PermissionGatedView", "RoleAdmin", "UserRoleAdmin"]
 
 
 class RoleAdmin(PermissionGatedView, DataclassModelMixin, ModelView, model=Role):
