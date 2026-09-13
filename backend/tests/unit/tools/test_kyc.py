@@ -159,6 +159,13 @@ async def test_decision_requires_a_reason_of_ten_characters(
         await service.approve_case(db_session, test_user, REVIEWER, case["id"], "too short")
 
 
+async def test_decision_reason_is_capped(db_session: AsyncSession, test_user: dict, test_user_2: dict) -> None:
+    case = await make_case(db_session, state=STATE_IN_REVIEW, assigned_to=test_user_2["id"])
+
+    with pytest.raises(ValidationError, match="at most"):
+        await service.approve_case(db_session, test_user, REVIEWER, case["id"], "x" * 5000)
+
+
 async def test_reject_moves_the_case_to_rejected(db_session: AsyncSession, test_user: dict, test_user_2: dict) -> None:
     case = await make_case(db_session, state=STATE_IN_REVIEW, assigned_to=test_user_2["id"])
 

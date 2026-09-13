@@ -128,6 +128,28 @@ async def revoke_role(db: AsyncSession, actor: audit.Actor, user_id: int, role_n
     await db.commit()
 
 
+async def record_login(db: AsyncSession, actor: audit.Actor) -> None:
+    """Record that a browser session was started, so sign-ins sit in the same trail as decisions."""
+    await audit.record(db, actor, "platform.session.login", "user", audit.actor_id(actor))
+    await db.commit()
+
+
+async def record_logout(db: AsyncSession, actor: audit.Actor) -> None:
+    """Record that a browser session was ended by the user."""
+    await audit.record(db, actor, "platform.session.logout", "user", audit.actor_id(actor))
+    await db.commit()
+
+
+async def record_failed_login(db: AsyncSession, identifier: str) -> None:
+    """Record a rejected sign-in without naming the account that was tried.
+
+    The submitted identifier is attacker-supplied and often a mistyped password, so only a stable digest of it goes in
+    the trail; repeated attempts are still countable.
+    """
+    await audit.record(db, None, "platform.session.login_failed", "user", "unknown", after={"identifier": identifier})
+    await db.commit()
+
+
 async def list_audit_events(
     db: AsyncSession,
     entity_type: str | None = None,
