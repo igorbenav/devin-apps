@@ -318,3 +318,15 @@ All four of the "not fixed, deliberately" items above are now closed; `SECURITY-
   `/api/` only), API/OAuth/admin sign-ins were unaudited (`record_login` takes a `method`), and an
   oversized or malformed `X-Forwarded-For` hop went into the audit row (truncated and parsed as an
   IP, else the socket address).
+
+## Session 5 — modularity investigation (no code changes)
+
+`MODULARITY.md` is the deliverable: what a tool has to touch outside its own directory today, four
+options, a recommended target (manifest-driven `ToolSpec`, a `platform_sdk` façade, import-linter
+contracts, per-tool Alembic branches, tests inside the module) and a six-step migration path.
+
+Written up rather than implemented on purpose — it changes shared wiring in `interfaces/` and the
+migration layout, and I want it confirmed before 50 tools depend on it. Two calls I would push back
+on if challenged: per-tool Alembic branches are the one step I would drop first (multiple heads is a
+real operational change for whoever runs deploys), and `import-linter` is a new dev dependency —
+without it every layering rule in the document is a convention that decays.
