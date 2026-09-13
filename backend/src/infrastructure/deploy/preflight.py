@@ -42,6 +42,32 @@ def expected_revision() -> str | None:
     return ScriptDirectory(str(MIGRATIONS_DIR)).get_current_head()
 
 
+def shared_redis_password_problems(settings: Settings) -> list[Problem]:
+    """One Redis server addressed with two passwords authenticates one client and rejects the other.
+
+    The compose stack runs a single Redis for cache/sessions, rate limiting and Taskiq, but each of the three has its
+    own password setting; they only have to agree when they point at the same server.
+    """
+    cache = (settings.CACHE_REDIS_HOST, settings.CACHE_REDIS_PORT)
+    others = {
+        "RATE_LIMITER": (
+            (settings.RATE_LIMITER_REDIS_HOST, settings.RATE_LIMITER_REDIS_PORT),
+            settings.RATE_LIMITER_REDIS_PASSWORD,
+        ),
+        "TASKIQ": ((settings.TASKIQ_REDIS_HOST, settings.TASKIQ_REDIS_PORT), settings.TASKIQ_REDIS_PASSWORD),
+    }
+
+    return [
+        Problem(
+            "config",
+            f"{name}_REDIS_* points at the same Redis server as the cache ({cache[0]}:{cache[1]}) but carries a "
+            f"different password. Set {name}_REDIS_PASSWORD to the same value as CACHE_REDIS_PASSWORD.",
+        )
+        for name, (server, password) in others.items()
+        if server == cache and password != settings.CACHE_REDIS_PASSWORD
+    ]
+
+
 def config_problems(settings: Settings) -> list[Problem]:
     """Configuration that would be rejected in production, checked whatever ``ENVIRONMENT`` says."""
     problems = [Problem("config", issue) for issue in ProductionSecurityValidator(settings).critical_issues()]
@@ -54,6 +80,8 @@ def config_problems(settings: Settings) -> list[Problem]:
                 "relies on will not run. Set ENVIRONMENT=production.",
             )
         )
+
+    problems += shared_redis_password_problems(settings)
 
     if settings.CREATE_TABLES_ON_STARTUP:
         problems.append(

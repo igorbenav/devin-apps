@@ -45,6 +45,16 @@ ADMIN_EMAIL=<real address>
 ISSUE_TRACKER_NEW_ISSUE_URL=https://github.com/<org>/<repo>/issues/new
 ```
 
+The compose stack runs **one** Redis for cache, sessions, rate limiting and Taskiq, but the app has a password
+setting per client. If you set one, set all three to the same value, or the server will authenticate the cache and
+reject the other two (preflight fails on the mismatch):
+
+```env
+CACHE_REDIS_PASSWORD=<same value>
+RATE_LIMITER_REDIS_PASSWORD=<same value>
+TASKIQ_REDIS_PASSWORD=<same value>
+```
+
 Managed Postgres instead of the compose one: set `DATABASE_URL` and it overrides every `POSTGRES_*` value. The async
 driver spelling matters — `postgresql+asyncpg://…?ssl=require`, *not* libpq's `sslmode=require`.
 

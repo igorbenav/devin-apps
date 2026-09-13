@@ -23,6 +23,15 @@ def deployable_settings(**overrides) -> Settings:
         "ADMIN_ENABLED": True,
         "ADMIN_USERNAME": "real_admin",
         "ADMIN_PASSWORD": "a_strong_admin_password_123",
+        "CACHE_REDIS_HOST": "redis",
+        "CACHE_REDIS_PORT": 6379,
+        "CACHE_REDIS_PASSWORD": "redis_password",
+        "RATE_LIMITER_REDIS_HOST": "redis",
+        "RATE_LIMITER_REDIS_PORT": 6379,
+        "RATE_LIMITER_REDIS_PASSWORD": "redis_password",
+        "TASKIQ_REDIS_HOST": "redis",
+        "TASKIQ_REDIS_PORT": 6379,
+        "TASKIQ_REDIS_PASSWORD": "redis_password",
     }
     values.update(overrides)
 
@@ -56,6 +65,16 @@ class TestConfigProblems:
         details = " ".join(p.detail for p in problems)
         assert "SECRET_KEY" in details
         assert "CSRF" in details
+
+
+class TestSharedRedisPassword:
+    def test_same_server_with_a_different_password_is_a_problem(self):
+        problems = config_problems(deployable_settings(TASKIQ_REDIS_PASSWORD=None))
+
+        assert any("TASKIQ_REDIS_PASSWORD" in p.detail for p in problems)
+
+    def test_a_separate_server_may_have_its_own_password(self):
+        assert config_problems(deployable_settings(TASKIQ_REDIS_HOST="queue.example.com")) == []
 
 
 class TestExpectedRevision:
