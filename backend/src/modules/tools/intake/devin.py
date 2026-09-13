@@ -18,7 +18,15 @@ class DevinNotConfigured(Exception):
 
 
 class DevinDispatchError(Exception):
-    """The API rejected the request or could not be reached."""
+    """The API rejected the request or could not be reached.
+
+    ``ambiguous`` means the session may exist anyway: a timeout, a 5xx, or a 2xx this client could not read. Retrying
+    those automatically would pay for a second session, so the caller has to leave them to a human.
+    """
+
+    def __init__(self, message: str, ambiguous: bool = False) -> None:
+        super().__init__(message)
+        self.ambiguous = ambiguous
 
 
 def is_configured() -> bool:
@@ -53,17 +61,18 @@ async def create_session(prompt: str, tags: list[str], title: str) -> dict[str, 
             response.raise_for_status()
             body = response.json()
     except httpx.HTTPStatusError as exc:  # the response body can echo the prompt; only the status is safe to surface
-        raise DevinDispatchError(f"Devin API returned {exc.response.status_code}") from exc
+        status_code = exc.response.status_code
+        raise DevinDispatchError(f"Devin API returned {status_code}", ambiguous=status_code >= 500) from exc
     except httpx.HTTPError as exc:
-        raise DevinDispatchError(f"Could not reach the Devin API: {type(exc).__name__}") from exc
+        raise DevinDispatchError(f"Could not reach the Devin API: {type(exc).__name__}", ambiguous=True) from exc
     except ValueError as exc:  # a 2xx that is not JSON, e.g. a gateway's maintenance page
-        raise DevinDispatchError("Devin API returned a response that was not JSON") from exc
+        raise DevinDispatchError("Devin API returned a response that was not JSON", ambiguous=True) from exc
 
     if not isinstance(body, dict):
-        raise DevinDispatchError("Devin API returned an unexpected response shape")
+        raise DevinDispatchError("Devin API returned an unexpected response shape", ambiguous=True)
 
     session_id = body.get("session_id")
     if not session_id:
-        raise DevinDispatchError("Devin API response contained no session_id")
+        raise DevinDispatchError("Devin API response contained no session_id", ambiguous=True)
 
     return {"session_id": str(session_id), "url": str(body.get("url") or "")}

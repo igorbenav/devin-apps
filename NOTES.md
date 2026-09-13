@@ -480,3 +480,14 @@ deciding the failure semantics above and confirming the API response shape.
   `PermissionDeniedError` and returns no markup at all; before, the refusal rendered the foreign
   request's id and status.
 - **A 2xx that is not JSON is a failed dispatch, not a 500.** Also rejects a non-object body.
+
+### Intake, third pass: ambiguous dispatch
+
+- **A timeout is not a failure.** The row lock stops two clicks racing, but it says nothing about a call that timed
+  out after Devin accepted it: the waiter would see `failed`, retry, and pay twice. Dispatch now commits a
+  `dispatching` claim *before* the HTTP call, and only `queued`/`failed` may be dispatched at all.
+- **Ambiguous outcomes stay claimed.** A transport error, a 5xx, or a 2xx this client cannot parse leaves the request
+  in `dispatching` with "a session may have been created; check Devin before starting another". There is no
+  idempotency key on `POST /v1/sessions`, so the only honest recovery is a human looking for the `tool:<slug>` tag;
+  the UI hides the retry button in that state rather than offering a second charge.
+- A 4xx (bad payload, bad key) is definitive, so it stays `failed` and retryable.

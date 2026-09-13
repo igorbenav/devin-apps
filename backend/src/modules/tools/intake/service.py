@@ -21,7 +21,14 @@ from ....platform_sdk import (
 )
 from . import devin
 from .crud import crud_tool_requests
-from .models import STATUS_DISPATCHED, STATUS_FAILED, STATUS_QUEUED, ToolRequest
+from .models import (
+    RETRYABLE_STATUSES,
+    STATUS_DISPATCHED,
+    STATUS_DISPATCHING,
+    STATUS_FAILED,
+    STATUS_QUEUED,
+    ToolRequest,
+)
 from .prompt import build_prompt
 from .schemas import ToolRequestBrief, ToolRequestCreate, ToolRequestDispatch, ToolRequestRead
 
@@ -115,6 +122,18 @@ async def dispatch_request(db: AsyncSession, actor: dict[str, Any], request_id: 
         raise PermissionDeniedError("Only the requester or a request admin can start this session")
     if stored["status"] == STATUS_DISPATCHED:
         raise ValidationError(f"Request {request_id} already has a session")
+    if stored["status"] not in RETRYABLE_STATUSES:
+        raise ValidationError(
+            f"Request {request_id} is already being started. If it stays here, check Devin for a session with the "
+            f"tag tool:{stored['slug_hint']} before starting another one."
+        )
+
+    if not devin.is_configured():
+        return stored
+
+    # Claim the row and commit before the call goes out. The lock alone is not enough: a timeout after Devin accepted
+    # the request would otherwise leave the row retryable, and the next click would pay for a second session.
+    stored = await _record_dispatch(db, actor, stored, ToolRequestDispatch(status=STATUS_DISPATCHING))
 
     usernames = await usernames_for_ids(db, {requester_id})
     prompt = build_prompt(stored, usernames.get(requester_id, str(requester_id)))
@@ -124,10 +143,17 @@ async def dispatch_request(db: AsyncSession, actor: dict[str, Any], request_id: 
             tags=[f"tool:{stored['slug_hint']}", "source:intake"],
             title=f"Add internal tool: {stored['title']}",
         )
-    except devin.DevinNotConfigured:
-        return stored
+    except devin.DevinNotConfigured:  # the key was removed between the check above and the call
+        return await _record_dispatch(db, actor, stored, ToolRequestDispatch(status=STATUS_QUEUED))
     except devin.DevinDispatchError as exc:
-        return await _record_dispatch(db, actor, stored, ToolRequestDispatch(status=STATUS_FAILED, dispatch_error=str(exc)))
+        # An ambiguous failure stays claimed: a session may exist, and only a human can tell.
+        message = f"{exc}. A session may have been created; check Devin before starting another." if exc.ambiguous else str(exc)
+        return await _record_dispatch(
+            db,
+            actor,
+            stored,
+            ToolRequestDispatch(status=STATUS_DISPATCHING if exc.ambiguous else STATUS_FAILED, dispatch_error=message),
+        )
 
     return await _record_dispatch(
         db,
@@ -142,6 +168,14 @@ async def dispatch_request(db: AsyncSession, actor: dict[str, Any], request_id: 
     )
 
 
+_DISPATCH_ACTIONS = {
+    STATUS_QUEUED: "intake.request.dispatch_skipped",
+    STATUS_DISPATCHING: "intake.request.dispatching",
+    STATUS_DISPATCHED: "intake.request.dispatched",
+    STATUS_FAILED: "intake.request.dispatch_failed",
+}
+
+
 async def _record_dispatch(
     db: AsyncSession, actor: dict[str, Any], stored: dict[str, Any], outcome: ToolRequestDispatch
 ) -> dict[str, Any]:
@@ -149,7 +183,7 @@ async def _record_dispatch(
     await audit.record(
         db,
         actor,
-        "intake.request.dispatched" if outcome.status == STATUS_DISPATCHED else "intake.request.dispatch_failed",
+        _DISPATCH_ACTIONS[outcome.status],
         ENTITY_TYPE,
         stored["id"],
         before={"status": stored["status"]},

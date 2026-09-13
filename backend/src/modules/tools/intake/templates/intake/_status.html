@@ -9,7 +9,7 @@
     {% endif %}
   </p>
   {% if item.dispatch_error %}<p class="error small">{{ item.dispatch_error }}</p>{% endif %}
-  {% if item.status != "dispatched" and can_retry %}
+  {% if item.status in retryable_statuses and can_retry %}
   <button class="button" hx-post="/tools/intake/{{ item.id }}/dispatch"
           hx-target="#intake-status" hx-swap="innerHTML"
           {% if not devin_configured %}disabled title="No Devin API key is configured on this deployment"{% endif %}>

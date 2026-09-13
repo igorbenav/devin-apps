@@ -6,11 +6,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ....platform_sdk import Base, TimestampMixin
 
 STATUS_QUEUED = "queued"
+#: Claimed: the API call is in flight, or it ended in a way that may or may not have created a session. Either way
+#: nobody may dispatch this request again without checking Devin first.
+STATUS_DISPATCHING = "dispatching"
 STATUS_DISPATCHED = "dispatched"
 STATUS_FAILED = "failed"
 
+#: The statuses a dispatch may be started from. ``dispatching`` is deliberately absent.
+RETRYABLE_STATUSES = frozenset({STATUS_QUEUED, STATUS_FAILED})
+
 STATUS_LABELS = {
     STATUS_QUEUED: "Queued",
+    STATUS_DISPATCHING: "Starting…",
     STATUS_DISPATCHED: "Session started",
     STATUS_FAILED: "Dispatch failed",
 }

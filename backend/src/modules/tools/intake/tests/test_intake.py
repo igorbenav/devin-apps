@@ -220,10 +220,32 @@ async def test_dispatch_records_a_failure_when_a_2xx_is_not_json(
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
-    failed = await service.dispatch_request(db_session, test_user, created["id"])
+    unresolved = await service.dispatch_request(db_session, test_user, created["id"])
 
-    assert failed["status"] == "failed"
-    assert failed["dispatch_error"] == "Devin API returned a response that was not JSON"
+    # A 2xx this client cannot read may still have created a session, so the request stays claimed for a human.
+    assert unresolved["status"] == "dispatching"
+    assert "not JSON" in unresolved["dispatch_error"]
+
+    with pytest.raises(ValidationError, match="already being started"):
+        await service.dispatch_request(db_session, test_user, created["id"])
+
+
+async def test_a_timeout_leaves_the_request_claimed_instead_of_retryable(
+    db_session: AsyncSession, test_user: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unconfigured(monkeypatch)
+    created = await service.submit_request(db_session, test_user, brief())
+    configured(monkeypatch)
+
+    async def fake_post(self: Any, path: str, json: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
+        raise httpx.ReadTimeout("timed out", request=httpx.Request("POST", path))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    unresolved = await service.dispatch_request(db_session, test_user, created["id"])
+
+    assert unresolved["status"] == "dispatching"
+    assert "check Devin before starting another" in unresolved["dispatch_error"]
 
 
 def test_only_the_requester_or_an_admin_may_see_a_request() -> None:

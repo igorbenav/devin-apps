@@ -21,7 +21,7 @@ from ....platform_sdk import (
     usernames_for_ids,
 )
 from . import devin, service
-from .models import STATUS_LABELS
+from .models import RETRYABLE_STATUSES, STATUS_LABELS
 from .permissions import PERM_REQUEST_ADMIN, REQUIRED_PERMISSION, SLUG
 from .prompt import build_prompt
 from .schemas import BRIEF_QUESTIONS, ToolRequestBrief
@@ -39,6 +39,7 @@ async def _list_context(db: AsyncSessionDep, viewer: ViewerContext, **extra: Any
         "usernames": await usernames_for_ids(db, {int(item["requester_user_id"]) for item in requests}),
         "questions": BRIEF_QUESTIONS,
         "status_labels": STATUS_LABELS,
+        "retryable_statuses": RETRYABLE_STATUSES,
         "sees_all": sees_all,
         "devin_configured": devin.is_configured(),
         "tool": get_tool(SLUG),
@@ -99,6 +100,7 @@ async def detail_page(request: Request, db: AsyncSessionDep, viewer: ViewerDep, 
             "requester": requester,
             "questions": BRIEF_QUESTIONS,
             "status_labels": STATUS_LABELS,
+            "retryable_statuses": RETRYABLE_STATUSES,
             "prompt": build_prompt(stored, requester),
             "can_retry": True,
             "devin_configured": devin.is_configured(),
@@ -129,6 +131,7 @@ async def retry_dispatch(request: Request, db: AsyncSessionDep, viewer: ViewerDe
             "item": stored,
             "error": error,
             "status_labels": STATUS_LABELS,
+            "retryable_statuses": RETRYABLE_STATUSES,
             "devin_configured": devin.is_configured(),
             "can_retry": True,
         },
