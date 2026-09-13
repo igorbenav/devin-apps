@@ -8,12 +8,15 @@ import hashlib
 from typing import Any
 
 from crudauth.exceptions import ForbiddenException
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...common.exceptions import ResourceExistsError, ResourceNotFoundError
 from ...platform import audit
 from ...platform.constants import PERM_FLAGS_WRITE
 from .crud import crud_flags
+from .models import Flag
 from .schemas import FlagCreate, FlagRead, FlagUpdate
 
 ENTITY_TYPE = "feature_flag"
@@ -57,6 +60,19 @@ async def get_flag(db: AsyncSession, flag_id: int) -> dict[str, Any]:
     return dict(flag)
 
 
+async def _lock_flag(db: AsyncSession, flag_id: int) -> dict[str, Any]:
+    """Read a flag with ``SELECT ... FOR UPDATE`` so concurrent writers queue instead of clobbering each other.
+
+    A toggle is a read-modify-write; without the lock two simultaneous toggles both read the old value, write the same
+    inverse, and one of them is silently lost.
+    """
+    result = await db.execute(select(Flag).where(Flag.id == flag_id).with_for_update())
+    flag = result.scalar_one_or_none()
+    if flag is None:
+        raise ResourceNotFoundError(f"Flag {flag_id} not found")
+    return FlagRead.model_validate(flag, from_attributes=True).model_dump()
+
+
 async def get_flag_by_key(db: AsyncSession, key: str) -> dict[str, Any]:
     """One flag by key, or :class:`ResourceNotFoundError`."""
     flag = await crud_flags.get(db=db, key=key, schema_to_select=FlagRead)
@@ -80,18 +96,22 @@ async def create_flag(
     if await crud_flags.exists(db=db, key=key):
         raise ResourceExistsError(f"A flag with key '{key}' already exists")
 
-    created = await crud_flags.create(
-        db=db,
-        object=FlagCreate(
-            key=key,
-            description=description,
-            enabled=enabled,
-            rollout_percent=rollout_percent,
-            updated_by=_actor_id(actor),
-        ),
-        commit=False,
-        schema_to_select=FlagRead,
-    )
+    try:
+        created = await crud_flags.create(
+            db=db,
+            object=FlagCreate(
+                key=key,
+                description=description,
+                enabled=enabled,
+                rollout_percent=rollout_percent,
+                updated_by=_actor_id(actor),
+            ),
+            commit=False,
+            schema_to_select=FlagRead,
+        )
+    except IntegrityError as exc:
+        await db.rollback()
+        raise ResourceExistsError(f"A flag with key '{key}' already exists") from exc
     await audit.record(db, actor, "flags.flag.created", ENTITY_TYPE, created["id"], after=_snapshot(dict(created)))
     await db.commit()
     return await get_flag(db, created["id"])
@@ -108,7 +128,7 @@ async def update_flag(
 ) -> dict[str, Any]:
     """Change a flag's description, state or rollout, and audit the change."""
     _require_write(permissions)
-    flag = await get_flag(db, flag_id)
+    flag = await _lock_flag(db, flag_id)
 
     changes = FlagUpdate(
         description=description,
@@ -133,7 +153,7 @@ async def update_flag(
 async def toggle_flag(db: AsyncSession, actor: dict[str, Any], permissions: set[str], flag_id: int) -> dict[str, Any]:
     """Flip a flag on or off, and audit the flip."""
     _require_write(permissions)
-    flag = await get_flag(db, flag_id)
+    flag = await _lock_flag(db, flag_id)
 
     await crud_flags.update(
         db=db,

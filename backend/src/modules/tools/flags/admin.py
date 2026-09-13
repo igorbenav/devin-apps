@@ -6,11 +6,12 @@ percentages, deleting a retired flag — happens here.
 
 from sqladmin import ModelView
 
+from ...platform.admin import PermissionGatedView
 from ...platform.constants import PERM_PLATFORM_ADMIN
 from .models import Flag
 
 
-class FlagAdmin(ModelView, model=Flag):
+class FlagAdmin(PermissionGatedView, ModelView, model=Flag):
     """Back-office view of the feature flags."""
 
     required_permission = PERM_PLATFORM_ADMIN

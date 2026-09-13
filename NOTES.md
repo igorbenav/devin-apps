@@ -234,8 +234,9 @@ For a security reviewer:
 - Rollout bucketing is `sha256(f"{key}:{subject}")`, first 4 bytes mod 100. Including the key means
   a subject is not in the same bucket for every flag (otherwise the same unlucky 10% of users get
   every partial rollout). Deterministic and stable across processes — no `hash()`, which is salted.
-- `rollout_percent` is validated 0–100 in the Pydantic schemas only; no DB CHECK constraint, to
-  match how the rest of the repo does validation.
+- `rollout_percent` is validated 0–100 in the Pydantic schemas and by a DB CHECK constraint
+  (`ck_feature_flag_rollout_percent`). The schema check is the friendly error; the constraint is
+  there because SQLAdmin and psql write to this table without going through the schemas.
 - Unknown flag keys return the repo's generic 404 error envelope rather than an
   `{enabled: false}` body. A typo'd key should be loud, not silently false.
 - The SQLAdmin view for flags has `can_create = False`: creating a flag without going through the
@@ -243,3 +244,19 @@ For a security reviewer:
   audited — same hole the platform's admin surface has generally, noted in session 1.
 - The seed prints the plaintext API key once and nowhere else; it is not committed and not stored
   in recoverable form.
+
+### Review follow-ups (same session)
+
+- `update_flag` and `toggle_flag` now read the row with `SELECT ... FOR UPDATE` before deciding what
+  to write. A toggle is a read-modify-write; two concurrent toggles both read the old value and
+  write the same inverse, so one is silently lost.
+- `create_flag` keeps the `exists` pre-check for the friendly message but also catches the unique
+  violation, so a race returns "already exists" instead of a 500.
+- `updated_at` is set by the model (`onupdate`), which covers SQLAdmin edits too, rather than by
+  each service function.
+- The permission gate for SQLAdmin views moved from `interfaces/admin/views/platform.py` to
+  `modules/platform/admin.py` so tool modules can mix it in without importing an interface layer.
+  `FlagAdmin` declared `required_permission` but did not inherit the gate, so it was inert; the
+  generator template had the same hole and now emits the mixin.
+- The seeded API key prints to stdout rather than through the logger, so a live credential does not
+  end up in aggregated application logs.

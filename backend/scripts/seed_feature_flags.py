@@ -103,10 +103,12 @@ async def seed_feature_flags() -> None:
 
     logger.info(f"Feature flags: {created} created, {len(FLAGS) - created} already present")
     if api_key:
-        logger.info(f"Demo evaluation API key for '{ADMIN_USERNAME}' (shown once): {api_key}")
-        logger.info(
+        # Written to stdout, not the logger: the plaintext key is only recoverable here, and shipping a live
+        # credential into aggregated application logs is worse than making the operator copy it off the terminal.
+        print(f"\nDemo evaluation API key for '{ADMIN_USERNAME}' (shown once, not logged):\n  {api_key}")
+        print(
             "Try it: curl -H 'X-API-Key: <key>' "
-            "'http://localhost:8000/api/v1/flags/evaluate?key=payouts.instant&subject=merchant-42'"
+            "'http://localhost:8000/api/v1/flags/evaluate?key=payouts.instant&subject=merchant-42'\n"
         )
     else:
         logger.info(f"API key '{API_KEY_NAME}' already exists; delete it in /admin to mint a new one")

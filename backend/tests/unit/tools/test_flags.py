@@ -1,19 +1,28 @@
 """Unit tests for the Feature Flags tool: write permission, audit, evaluation."""
 
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from crudauth.exceptions import ForbiddenException, UnauthorizedException
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
 
 from src.modules.api_keys.dependencies import require_api_key
 from src.modules.api_keys.enums import KeyPermissionAction, KeyPermissionResource
 from src.modules.api_keys.schemas import APIKeyValidationResponse
 from src.modules.common.exceptions import ResourceExistsError
-from src.modules.platform.constants import ADMIN_PERMISSIONS, ANALYST_PERMISSIONS, PERM_FLAGS_WRITE
+from src.modules.platform.admin import PermissionGatedView
+from src.modules.platform.constants import (
+    ADMIN_PERMISSIONS,
+    ANALYST_PERMISSIONS,
+    PERM_FLAGS_WRITE,
+    PERM_PLATFORM_ADMIN,
+)
 from src.modules.platform.crud import crud_audit_events
 from src.modules.platform.dependencies import ViewerContext, require_page_permission
 from src.modules.tools.flags import service
+from src.modules.tools.flags.admin import FlagAdmin
 
 pytestmark = pytest.mark.asyncio
 
@@ -157,3 +166,25 @@ class _StubKeyService:
         if not self.valid:
             return APIKeyValidationResponse(is_valid=False, error_message="Invalid API key")
         return APIKeyValidationResponse(is_valid=True, api_key_id=1, user_id=1)
+
+
+async def test_toggle_bumps_updated_at(db_session: AsyncSession, test_user: dict) -> None:
+    flag = await make_flag(db_session, test_user, "dashboard.new-nav")
+
+    toggled = await service.toggle_flag(db_session, test_user, ADMIN, flag["id"])
+
+    assert toggled["updated_at"] is not None
+    assert toggled["updated_at"] > flag["updated_at"]
+
+
+def test_admin_view_is_permission_gated() -> None:
+    """Without ``PermissionGatedView`` the ``required_permission`` attribute is inert."""
+    assert issubclass(FlagAdmin, PermissionGatedView)
+    assert FlagAdmin.required_permission == PERM_PLATFORM_ADMIN
+
+    open_request = SimpleNamespace(session={"user_id": 7, "permissions": ["flags.read"]})
+    admin_request = SimpleNamespace(session={"user_id": 7, "permissions": [PERM_PLATFORM_ADMIN]})
+
+    assert FlagAdmin().is_accessible(cast(Request, open_request)) is False
+    assert FlagAdmin().is_visible(cast(Request, open_request)) is False
+    assert FlagAdmin().is_accessible(cast(Request, admin_request)) is True

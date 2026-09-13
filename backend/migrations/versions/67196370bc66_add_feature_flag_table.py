@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("updated_by", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.CheckConstraint("rollout_percent BETWEEN 0 AND 100", name=op.f("ck_feature_flag_rollout_percent")),
         sa.ForeignKeyConstraint(["updated_by"], ["user.id"], name=op.f("fk_feature_flag_updated_by_user"), ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_feature_flag")),
     )
