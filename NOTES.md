@@ -462,3 +462,21 @@ Flags for a security reviewer:
 Time: the module itself was quick (the generator plus the manifest contract from PR #7 meant no
 shared file needed editing except the one role grant). The two things that took longest were
 deciding the failure semantics above and confirming the API response shape.
+
+### Intake, second pass (review + browser findings)
+
+- **Two paid-session races were real.** Both are now closed in the database, not in Python:
+  `submit_request` takes a transaction-scoped `pg_advisory_xact_lock` keyed by requester before it
+  counts today's requests, and `dispatch_request` takes `SELECT ... FOR UPDATE` on the row before it
+  reads the status. Without those, concurrent submits all read `count - 1` and two clicks on
+  "Start the session" both reach the API and both spend ACUs. Postgres-specific on purpose; the app
+  is Postgres-only already.
+- **Slug validation now matches `bp new tool` exactly** (`^[a-z][a-z0-9_]{1,48}[a-z0-9]$`). The old
+  pattern accepted hyphens the generator rejects, so the failure landed inside a paid session.
+  `ToolRequestRead` relaxes the pattern so tightening it cannot make an older row unreadable.
+  `submit_request` also refuses a slug an installed tool already uses, since the generator will not
+  overwrite an existing module.
+- **Ownership is enforced in the service, not the route.** A denied dispatch now raises
+  `PermissionDeniedError` and returns no markup at all; before, the refusal rendered the foreign
+  request's id and status.
+- **A 2xx that is not JSON is a failed dispatch, not a 500.** Also rejects a non-object body.

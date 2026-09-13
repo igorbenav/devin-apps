@@ -8,7 +8,7 @@ from crudauth.exceptions import ForbiddenException
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.common.exceptions import ValidationError
+from src.modules.common.exceptions import PermissionDeniedError, ValidationError
 from src.modules.platform.crud import crud_audit_events
 from src.modules.platform.dependencies import ViewerContext, require_page_permission
 from src.modules.tools.intake import devin, service
@@ -75,6 +75,21 @@ async def test_brief_rejects_a_slug_that_is_not_a_module_name() -> None:
         brief(slug_hint="Charge Backs")
 
 
+async def test_brief_rejects_a_hyphenated_slug_the_generator_would_reject() -> None:
+    with pytest.raises(PydanticValidationError):
+        brief(slug_hint="charge-backs")
+
+
+async def test_submit_refuses_a_slug_an_installed_tool_already_uses(
+    db_session: AsyncSession, test_user: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unconfigured(monkeypatch)
+    monkeypatch.setattr(service, "get_tool", lambda slug: object() if slug == "kyc" else None)
+
+    with pytest.raises(ValidationError, match="already exists"):
+        await service.submit_request(db_session, test_user, brief(slug_hint="kyc"))
+
+
 async def test_submit_records_the_brief_and_an_audit_event(
     db_session: AsyncSession, test_user: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -104,10 +119,10 @@ async def test_submit_is_rate_limited_per_requester(
 ) -> None:
     unconfigured(monkeypatch)
     for index in range(service.MAX_REQUESTS_PER_DAY):
-        await service.submit_request(db_session, test_user, brief(slug_hint=f"tool-{index}"))
+        await service.submit_request(db_session, test_user, brief(slug_hint=f"tool_{index}"))
 
     with pytest.raises(ValidationError, match="paid Devin session"):
-        await service.submit_request(db_session, test_user, brief(slug_hint="one-too-many"))
+        await service.submit_request(db_session, test_user, brief(slug_hint="one_too_many"))
 
 
 async def test_dispatch_sends_the_playbook_tags_and_acu_cap(
@@ -180,6 +195,35 @@ async def test_dispatch_refuses_to_start_a_second_session(
 
     with pytest.raises(ValidationError, match="already has a session"):
         await service.dispatch_request(db_session, test_user, created["id"])
+
+
+async def test_dispatch_refuses_someone_elses_request(
+    db_session: AsyncSession, test_user: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unconfigured(monkeypatch)
+    created = await service.submit_request(db_session, test_user, brief())
+    stranger = {**test_user, "id": int(test_user["id"]) + 1000}
+
+    with pytest.raises(PermissionDeniedError):
+        await service.dispatch_request(db_session, stranger, created["id"])
+
+
+async def test_dispatch_records_a_failure_when_a_2xx_is_not_json(
+    db_session: AsyncSession, test_user: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unconfigured(monkeypatch)
+    created = await service.submit_request(db_session, test_user, brief())
+    configured(monkeypatch)
+
+    async def fake_post(self: Any, path: str, json: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
+        return httpx.Response(200, text="<html>maintenance</html>", request=httpx.Request("POST", path))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    failed = await service.dispatch_request(db_session, test_user, created["id"])
+
+    assert failed["status"] == "failed"
+    assert failed["dispatch_error"] == "Devin API returned a response that was not JSON"
 
 
 def test_only_the_requester_or_an_admin_may_see_a_request() -> None:

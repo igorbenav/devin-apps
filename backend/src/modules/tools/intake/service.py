@@ -11,7 +11,14 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ....platform_sdk import ResourceNotFoundError, ValidationError, audit, usernames_for_ids
+from ....platform_sdk import (
+    PermissionDeniedError,
+    ResourceNotFoundError,
+    ValidationError,
+    audit,
+    get_tool,
+    usernames_for_ids,
+)
 from . import devin
 from .crud import crud_tool_requests
 from .models import STATUS_DISPATCHED, STATUS_FAILED, STATUS_QUEUED, ToolRequest
@@ -23,6 +30,9 @@ ENTITY_TYPE = "tool_request"
 #: A submission starts a paid session, so one requester cannot spend the budget in an afternoon by holding the enter
 #: key. Deliberately generous for a demo; tighten before this is real.
 MAX_REQUESTS_PER_DAY = 5
+
+#: Namespace for the per-requester advisory lock, so the key cannot collide with another feature's lock.
+_SUBMIT_LOCK_NAMESPACE = 8471003
 
 
 async def list_requests(db: AsyncSession, requester_user_id: int | None = None, limit: int = 100) -> list[dict[str, Any]]:
@@ -59,6 +69,12 @@ async def submit_request(db: AsyncSession, actor: dict[str, Any], brief: ToolReq
     :func:`dispatch_request` can retry it without the requester retyping anything.
     """
     actor_id = int(actor["id"])
+    # Counting and inserting have to be one atomic step, or N concurrent submissions all read N-1 and all spend money.
+    await db.execute(select(func.pg_advisory_xact_lock(_SUBMIT_LOCK_NAMESPACE, actor_id)))
+
+    if get_tool(brief.slug_hint) is not None:
+        raise ValidationError(f"A tool called '{brief.slug_hint}' already exists; pick another name")
+
     if await _requests_today(db, actor_id) >= MAX_REQUESTS_PER_DAY:
         raise ValidationError(
             f"You have submitted {MAX_REQUESTS_PER_DAY} requests in the last 24 hours. "
@@ -81,20 +97,25 @@ async def submit_request(db: AsyncSession, actor: dict[str, Any], brief: ToolReq
     )
     await db.commit()
 
-    return await dispatch_request(db, actor, int(created["id"]))
+    return await dispatch_request(db, actor, int(created["id"]), sees_all=True)
 
 
-async def dispatch_request(db: AsyncSession, actor: dict[str, Any], request_id: int) -> dict[str, Any]:
+async def dispatch_request(db: AsyncSession, actor: dict[str, Any], request_id: int, sees_all: bool = False) -> dict[str, Any]:
     """Start (or retry) the Devin session for a stored request.
 
     A deployment with no API key leaves the request ``queued``: the page then shows the prompt to copy, which is the
     honest behaviour for a demo and for anyone who would rather start the session themselves.
     """
+    # Row lock, not a bare read: two clicks on "Start the session" must not both reach the API and pay twice.
+    await db.execute(select(ToolRequest.id).where(ToolRequest.id == request_id).with_for_update())
     stored = await get_request(db, request_id)
+
+    requester_id = int(stored["requester_user_id"])
+    if not sees_all and requester_id != int(actor["id"]):
+        raise PermissionDeniedError("Only the requester or a request admin can start this session")
     if stored["status"] == STATUS_DISPATCHED:
         raise ValidationError(f"Request {request_id} already has a session")
 
-    requester_id = int(stored["requester_user_id"])
     usernames = await usernames_for_ids(db, {requester_id})
     prompt = build_prompt(stored, usernames.get(requester_id, str(requester_id)))
     try:

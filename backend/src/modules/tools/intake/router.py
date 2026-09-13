@@ -111,15 +111,15 @@ async def detail_page(request: Request, db: AsyncSessionDep, viewer: ViewerDep, 
 @router.post("/{request_id}/dispatch")
 async def retry_dispatch(request: Request, db: AsyncSessionDep, viewer: ViewerDep, request_id: int) -> Any:
     """HTMX action: retry a failed or never-dispatched session."""
-    stored = await service.get_request(db, request_id)
     error: str | None = None
-    if not _may_act_on(stored, viewer):
-        error = "Only the requester or a request admin can start this session"
-    else:
-        try:
-            stored = await service.dispatch_request(db, viewer.user, request_id)
-        except DomainError as exc:
-            error = str(exc)
+    try:
+        stored = await service.dispatch_request(db, viewer.user, request_id, sees_all=PERM_REQUEST_ADMIN in viewer.permissions)
+    except PermissionDeniedError:
+        # Nothing about someone else's request comes back, not even its status.
+        raise
+    except DomainError as exc:
+        stored = await service.get_request(db, request_id)
+        error = str(exc)
 
     return render(
         request,

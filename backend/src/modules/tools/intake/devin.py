@@ -56,6 +56,11 @@ async def create_session(prompt: str, tags: list[str], title: str) -> dict[str, 
         raise DevinDispatchError(f"Devin API returned {exc.response.status_code}") from exc
     except httpx.HTTPError as exc:
         raise DevinDispatchError(f"Could not reach the Devin API: {type(exc).__name__}") from exc
+    except ValueError as exc:  # a 2xx that is not JSON, e.g. a gateway's maintenance page
+        raise DevinDispatchError("Devin API returned a response that was not JSON") from exc
+
+    if not isinstance(body, dict):
+        raise DevinDispatchError("Devin API returned an unexpected response shape")
 
     session_id = body.get("session_id")
     if not session_id:

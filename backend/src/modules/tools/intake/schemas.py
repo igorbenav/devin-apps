@@ -6,7 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .models import STATUS_QUEUED
 
-SLUG_PATTERN = r"^[a-z][a-z0-9-]{1,48}[a-z0-9]$"
+#: The same shape `bp new tool` accepts, because the slug becomes a Python module name: lowercase, digits,
+#: underscores. A hyphen here would validate here and then fail in the generator, inside a paid session.
+SLUG_PATTERN = r"^[a-z][a-z0-9_]{1,48}[a-z0-9]$"
+
+RESERVED_SLUGS = frozenset({"platform", "admin", "audit", "static", "api"})
 
 #: Brief question text, keyed by the column that stores the answer. Drives the form, the detail page and the prompt, so
 #: the three can never drift apart.
@@ -46,7 +50,7 @@ class ToolRequestBrief(BaseModel):
     @field_validator("slug_hint")
     @classmethod
     def _reserved_slug(cls, value: str) -> str:
-        if value in {"platform", "admin", "audit", "static", "api"}:
+        if value in RESERVED_SLUGS:
             raise ValueError(f"'{value}' is reserved; pick another name")
         return value
 
@@ -66,6 +70,10 @@ class ToolRequestDispatch(BaseModel):
 
 
 class ToolRequestRead(ToolRequestBrief):
+    #: Stored rows are read back with the pattern relaxed: tightening the accepted shape must not make an older
+    #: request unreadable.
+    slug_hint: str
+
     id: int
     requester_user_id: int
     status: str

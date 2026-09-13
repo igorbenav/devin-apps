@@ -15,7 +15,8 @@
 
   <label for="slug_hint">Short name for its URL and module</label>
   <input id="slug_hint" name="slug_hint" maxlength="50" value="{{ answers.get('slug_hint', '') }}"
-         placeholder="chargebacks" pattern="[a-z][a-z0-9-]*[a-z0-9]" required>
+         placeholder="chargebacks" pattern="[a-z][a-z0-9_]*[a-z0-9]"
+         title="Lowercase letters, digits and underscores, e.g. chargeback_review" required>
 
   {% for field, question in questions %}
   <label for="{{ field }}">{{ loop.index }}. {{ question }}</label>
