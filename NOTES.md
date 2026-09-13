@@ -44,6 +44,12 @@ Append-only. Newest session at the bottom.
   version first, found it fails on a genuinely empty database, and regenerated it as the baseline
   the repo's own migration docs tell you to create. The documented run flow therefore sets
   `CREATE_TABLES_ON_STARTUP=false`, so Alembic owns the schema and does not race `create_all`.
+- **Migrate and seed run from the host, not `docker compose exec api`.** The dev image copies only
+  `backend/src` and `backend/tests`, so `alembic.ini`, `migrations/` and `scripts/` are not in the
+  container (there is a separate `migrate` build target for the migrations alone, and nothing that
+  ships the seed script). My first README draft used `compose exec api` and failed with
+  `No 'script_location' key found in configuration.` — caught during browser testing. Packaging
+  the migrations and scripts into the dev image would be the real fix; out of scope here.
 - **The launcher renders a "no tools yet" empty state** rather than 404ing, since Session 1 ships
   zero tools by design.
 - **Generator Jinja uses `<< >>` / `<% %>` delimiters.** The templates emit Jinja *and* Python, so

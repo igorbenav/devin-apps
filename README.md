@@ -57,8 +57,9 @@ cp backend/.env.example backend/.env && uv run bp env gen-secret   # paste into 
 echo 'CREATE_TABLES_ON_STARTUP=false' >> backend/.env                # Alembic owns the schema
 docker compose up --build
 
-# in another terminal: migrate, then seed roles + demo users
-docker compose exec api sh -c "alembic upgrade head && python -m scripts.setup_initial_data"
+# in another terminal: migrate, then seed roles + demo users.
+# The dev image ships only src/, so run these from the host against the published Postgres.
+cd backend && uv run alembic upgrade head && uv run python -m scripts.setup_initial_data
 ```
 
 The single migration in `backend/migrations/versions/` is the baseline schema (the boilerplate
