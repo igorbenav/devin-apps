@@ -55,17 +55,17 @@ uv sync --all-packages --all-extras
 uv run bp deploy generate local
 cp backend/.env.example backend/.env && uv run bp env gen-secret   # paste into SECRET_KEY
 echo 'CREATE_TABLES_ON_STARTUP=false' >> backend/.env                # Alembic owns the schema
-docker compose up --build
+docker compose up -d --build
 
-# in another terminal: migrate, then seed roles + demo users.
-# The dev image ships only src/, so run these from the host against the published Postgres.
-cd backend && POSTGRES_SERVER=127.0.0.1 uv run alembic upgrade head \
-  && POSTGRES_SERVER=127.0.0.1 uv run python -m scripts.setup_initial_data
+# migrate, then seed roles + demo users, from inside the running container
+docker compose exec -w /app api sh -c "alembic upgrade head && python -m scripts.setup_initial_data"
 ```
 
 The single migration in `backend/migrations/versions/` is the baseline schema (the boilerplate
 ships none, creating tables from the models at startup instead), so it must run against an empty
-database with `CREATE_TABLES_ON_STARTUP=false`.
+database with `CREATE_TABLES_ON_STARTUP=false`. For a real deployment (production env file, the
+same migrations run by a one-shot container, the preflight check, upgrades and rollback) follow
+[DEPLOY.md](DEPLOY.md).
 
 Then open <http://127.0.0.1:8000/> — the launcher (login required), `/audit` for the audit log
 (needs `audit.read`), `/admin` for SQLAdmin (needs `platform.admin` or superuser).

@@ -14,13 +14,14 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.append(str(backend_dir))
 
+from scripts.sync_roles import sync_roles  # noqa: E402
 from src.infrastructure.config.settings import EnvironmentOption, settings  # noqa: E402
 from src.infrastructure.database.initialize import close_database  # noqa: E402
 from src.infrastructure.database.session import local_session  # noqa: E402
 from src.infrastructure.logging import get_logger  # noqa: E402
 from src.modules.common.exceptions import UserExistsError  # noqa: E402
 from src.modules.platform import service as platform_service  # noqa: E402
-from src.modules.platform.constants import ROLE_ADMIN, ROLE_ANALYST, ROLE_REVIEWER, seeded_roles  # noqa: E402
+from src.modules.platform.constants import ROLE_ADMIN, ROLE_ANALYST, ROLE_REVIEWER  # noqa: E402
 from src.modules.user.schemas import UserCreate  # noqa: E402
 from src.modules.user.service import UserService  # noqa: E402
 
@@ -56,11 +57,9 @@ async def create_platform_roles() -> None:
     _refuse_in_production()
     user_service = UserService()
 
-    async with local_session() as db:
-        for name, (description, permissions) in seeded_roles().items():
-            await platform_service.upsert_role(db, None, name, description, list(permissions))
-            logger.info(f"Role '{name}' seeded with {len(permissions)} permissions")
+    await sync_roles()
 
+    async with local_session() as db:
         for full_name, username, email, role_name in DEMO_USERS:
             try:
                 user = await user_service.create(

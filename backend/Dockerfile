@@ -26,7 +26,7 @@ FROM python:3.11-slim AS base
 
 WORKDIR /app
 
-# Install uv for fast, secure package installation  
+# Install uv for fast, secure package installation
 COPY --from=ghcr.io/astral-sh/uv:0.9.9 /uv /usr/local/bin/uv
 
 # Install system dependencies needed for Python packages
@@ -43,6 +43,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Copy source code
 COPY backend/src ./src
+
+# Migrations and operational scripts ship in every stage: a deployment has to run `alembic upgrade head`,
+# `python -m scripts.sync_roles` and `python -m scripts.preflight` from the same image it serves from.
+COPY backend/migrations ./migrations
+COPY backend/alembic.ini .
+COPY backend/scripts ./scripts
 
 # Set Python path
 ENV PYTHONPATH=/app/src
@@ -78,10 +84,6 @@ FROM base AS migrate
 # Optional build arg for CI/CD pipelines
 ARG DATABASE_URL=""
 
-# Copy migration files
-COPY backend/migrations ./migrations
-COPY backend/alembic.ini .
-
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -m -g appuser appuser
 RUN chown -R appuser:appuser /app
@@ -105,4 +107,4 @@ USER appuser
 
 # Production command with FastAPI CLI and configurable workers
 ENV WORKERS=1
-CMD ["sh", "-c", "fastapi run interfaces/main.py --host 0.0.0.0 --port 8000 --workers $WORKERS"] 
+CMD ["sh", "-c", "fastapi run interfaces/main.py --host 0.0.0.0 --port 8000 --workers $WORKERS"]

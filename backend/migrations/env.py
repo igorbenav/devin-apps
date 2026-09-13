@@ -33,9 +33,9 @@ def validate_production_migration():
                 "This ensures you understand you're migrating production data."
             )
 
-        # Check for required production environment variables
-        required_vars = ["DATABASE_URL", "SECRET_KEY"]
-        missing_vars = [var for var in required_vars if not os.getenv(var)]
+        # The URL is built from DATABASE_URL when it is set and from the POSTGRES_* values otherwise, so requiring
+        # DATABASE_URL here would rule out a database the deployment hosts itself.
+        missing_vars = [var for var in ["SECRET_KEY"] if not os.getenv(var)]
         if missing_vars:
             raise Exception(f"Missing required production environment variables: {missing_vars}")
 

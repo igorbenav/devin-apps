@@ -143,6 +143,17 @@ Tests live in `modules/tools/<slug>/tests/` next to the code; fixtures (`db_sess
 test, a state-transition test asserting both the new state and the audit event it wrote, and a
 rejected invalid transition. Unit tests only — do not spend time on integration tests.
 
+## 8. Shipping it
+
+Nothing tool-specific to do: one repo, one deployable app. The deploy rebuilds the image and the `migrate` service
+runs `alembic upgrade head` then `scripts.sync_roles`, which picks up the permission strings your manifest declares
+and applies your `ROLE_GRANTS` decision to the existing roles. Grants to *other* roles are a human choice in
+`/admin` → Roles after the rollout. The full runbook — env file, preflight, upgrade, rollback — is [DEPLOY.md](DEPLOY.md).
+
+What can still break a deploy, so check it before merging: a migration that is not rebased onto the current `head`
+(the chain is linear), a seed that is not idempotent (it runs on every deploy in environments that seed), and a
+permission string renamed without a migration for the rows already holding the old one.
+
 ## Definition of done
 
 - `bp new tool` module replaced with your domain; no leftover example code.

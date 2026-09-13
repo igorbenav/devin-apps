@@ -126,7 +126,7 @@ class ProductionSecurityValidator:
 
         self.logger.info("Running production security validation...")
 
-        critical_errors = self._validate_critical_security()
+        critical_errors = self.critical_issues()
         if critical_errors:
             error_msg = "Critical security issues detected in production:\n" + "\n".join(
                 f"  • {error}" for error in critical_errors
@@ -137,6 +137,13 @@ class ProductionSecurityValidator:
         self._validate_warning_security()
 
         self.logger.info("Production security validation completed successfully")
+
+    def critical_issues(self) -> list[str]:
+        """The issues that stop a production start, evaluated whatever ``ENVIRONMENT`` says.
+
+        Exposed so a deploy can be checked before the rollout, not only as the new process refuses to boot.
+        """
+        return self._validate_critical_security()
 
     def _is_production(self) -> bool:
         """Check if the application is running in production environment.

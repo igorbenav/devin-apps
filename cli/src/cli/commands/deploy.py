@@ -81,11 +81,19 @@ def generate(
     info("")
     info("done. Next steps:")
     if mode == DeployMode.local:
-        info("  docker compose up --build")
-    elif mode == DeployMode.prod:
         info("  cp backend/.env.example backend/.env  # if you haven't already")
+        info("  uv run bp env gen-secret                          # paste into SECRET_KEY")
+        info("  echo 'CREATE_TABLES_ON_STARTUP=false' >> backend/.env")
         info("  docker compose up -d --build")
+        info('  docker compose exec -w /app api sh -c "alembic upgrade head && python -m scripts.setup_initial_data"')
+        info("  curl -fsS http://127.0.0.1:8000/health")
     else:
-        info("  cp backend/.env.example backend/.env  # if you haven't already")
-        info("  docker compose up -d --build")
-        info("  curl -i http://localhost/api/v1/health")
+        health = "http://127.0.0.1:8000/health" if mode == DeployMode.prod else "http://localhost/health"
+        info("  cp backend/.env.example backend/.env  # then fill it in, see DEPLOY.md")
+        info("  docker compose build")
+        info("  docker compose run --rm -w /app --no-deps api python -m scripts.preflight --config-only")
+        info("  docker compose up -d           # migrate + sync_roles run first, then the API")
+        info("  docker compose run --rm -w /app api python -m scripts.create_first_superuser")
+        info(f"  curl -fsS {health}")
+        info("")
+        info("  DEPLOY.md has the full runbook: required env vars, upgrades, rollback.")
