@@ -192,3 +192,92 @@ then a per-tool decision rather than a rewrite.
 - **`platform_sdk` is a promise.** Once 50 tools import it, changing it is a migration. Keep it small and refuse
   to re-export anything a tool should not touch (sessions, the app factory, other tools).
 - This proposal adds one dev dependency (`import-linter`) and no runtime dependency.
+
+## Appendix A — the tree, today and after
+
+Today, with the two real tools (only the files that matter here):
+
+```
+backend/
+  migrations/versions/            29bc… baseline · b5a7… kyc · 6719… flags · c41a… key enum   <- one chain, shared
+  scripts/                        setup_initial_data.py · seed_kyc_cases.py · seed_feature_flags.py  <- shared
+  tests/unit/tools/               test_kyc.py · test_flags.py                                  <- outside the module
+  src/
+    infrastructure/               config, database, auth, cache, rate_limit, security, taskiq
+    interfaces/
+      main.py                     setup_platform(app)
+      api/v1/__init__.py          imports ...tools.flags.api                                   <- EDIT PER TOOL
+      admin/views/__init__.py     imports ...tools.flags.admin, ...tools.kyc.admin             <- EDIT PER TOOL
+    modules/
+      platform/                   registry · dependencies · audit · templating · admin · routes · setup
+        constants.py              kyc.review, kyc.approve, flags.write, …                      <- EDIT PER TOOL
+        templates/platform/       base.html · home.html · audit.html · login.html
+      tools/
+        kyc/                      models schemas crud service router admin tool templates/kyc/
+        flags/                    models schemas crud service router api admin tool templates/flags/
+    static/                       css/platform.css · js/htmx.min.js
+```
+
+After the proposal — the four `EDIT PER TOOL` lines are gone and the tool directory is self-contained:
+
+```
+backend/
+  migrations/versions/            platform baseline only
+  scripts/setup_initial_data.py   calls run_tool_seeds(db) — no per-tool scripts
+  src/
+    platform_sdk/__init__.py      ToolSpec, register, Permission, audit, require_permission, render, …
+    interfaces/
+      api/v1/__init__.py          include_tool_api_routers(router)      # no tool imports
+      admin/views/__init__.py     register_tool_admin_views(admin)      # no tool imports
+    modules/
+      platform/                   + collection: api routers, admin views, permission_catalog, run_tool_seeds
+        constants.py              audit.read, platform.admin  (platform's own permissions only)
+      tools/
+        kyc/
+          tool.py                 the manifest — pages, api, admin_views, permissions, seed, owner
+          models.py schemas.py crud.py service.py router.py admin.py seed.py
+          migrations/             this tool's Alembic branch (branch_label="kyc")
+          templates/kyc/          list.html detail.html _row.html
+          tests/                  test_rules.py test_permissions.py
+        flags/                    same shape, plus api.py
+        refunds/                  a third tool: same shape, nothing outside this directory
+  .importlinter                   layer + tool-independence contracts, run in CI
+```
+
+## Appendix B — registration, before and after
+
+| What the tool contributes | Today                                                 | After                                                            |
+| ------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- |
+| Launcher card + nav       | `ToolSpec` in `tool.py`, `discover_tools()`           | unchanged                                                        |
+| HTMX page router          | `router.router`, mounted by `include_tool_routers`    | declared as `pages=` in the manifest                             |
+| JSON API router           | hand-imported in `interfaces/api/v1/__init__.py`      | `api=` in the manifest, `include_tool_api_routers`               |
+| SQLAdmin views            | hand-imported in `interfaces/admin/views/__init__.py` | `admin_views=` in the manifest                                   |
+| Permission strings        | added to `platform/constants.py`                      | `permissions=` in the manifest, merged by `permission_catalog()` |
+| Demo/seed data            | new `scripts/seed_<slug>.py`                          | `seed=` in the manifest, called by `run_tool_seeds`              |
+| Schema                    | new revision on the shared chain                      | own Alembic branch under the tool                                |
+| Tests                     | `tests/unit/tools/test_<slug>.py`                     | `modules/tools/<slug>/tests/`                                    |
+| Owner                     | nowhere                                               | `owner=` in the manifest → `CODEOWNERS`                          |
+
+## Appendix C — the playbook for tool number three, after the change
+
+`bp new tool refunds --label "Refunds" --permission refunds.read` writes the directory above, then:
+
+1. **Model** `models.py` (tables prefixed `refunds_`), `schemas.py`, `crud.py` — as today.
+1. **Rules** in `service.py`. Every state change is a service function and ends with
+   `await audit.record(db, actor, "refunds.request.approved", "refunds_request", id, before=…, after=…)`.
+   Route handlers never write.
+1. **Permissions**: declare them in `tool.py` (`Permission("refunds.approve", "…")`). They appear in the
+   catalog automatically; the only shared edit left is deciding which seeded role gets them.
+1. **UI**: `templates/refunds/list.html` extends `platform/base.html`; actions are `hx-post` returning the
+   updated partial; errors render inline. Buttons are rendered only when `permissions` and the domain rule
+   both allow the action.
+1. **Admin/API**, if wanted: write `admin.py` / `api.py` and list them in the manifest. No shared file is edited.
+1. **Seed**: `seed.py` exposing `async def seed_demo_data(db)`, referenced from the manifest.
+1. **Migration**: `alembic revision --autogenerate --branch-label refunds` inside the tool, review, then
+   `alembic upgrade heads`.
+1. **Tests**: `tests/` in the module — one per rule, plus a permission test. `pytest src/modules/tools/refunds`.
+1. **Done when**: tests and `lint-imports` pass, the card appears for the right roles only, every state change
+   shows up in `/audit`, and nothing outside `modules/tools/refunds/` changed except the seeded-role decision.
+
+Today the same list additionally requires edits to `platform/constants.py`, `interfaces/api/v1/__init__.py`,
+`interfaces/admin/views/__init__.py`, `scripts/`, and the shared migration chain — that is the whole delta.
