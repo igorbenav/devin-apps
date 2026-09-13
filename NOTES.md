@@ -44,6 +44,12 @@ Append-only. Newest session at the bottom.
   version first, found it fails on a genuinely empty database, and regenerated it as the baseline
   the repo's own migration docs tell you to create. The documented run flow therefore sets
   `CREATE_TABLES_ON_STARTUP=false`, so Alembic owns the schema and does not race `create_all`.
+- **`ClientCacheMiddleware` was publicly caching every non-`/api/` response — flag for the security
+  reviewer.** It assumed "not an API path" meant "static asset" and set `public, max-age=60`. That
+  predates this PR but only became dangerous once the platform served authenticated HTML: browser
+  testing hit a cached `/login?next=/audit` after logging in, and the same header would let a shared
+  cache serve one user's launcher or audit page to another. Inverted it — only `/static/` is public,
+  everything else is `private, no-cache, no-store, must-revalidate` — with a test.
 - **`CREATE_TABLES_ON_STARTUP` was silently ignored (upstream bug, fixed here).** `main.py` supplies
   its own `lifespan_with_security`, which called `lifespan_factory(settings)` and therefore took the
   factory's `create_tables_on_startup=True` default — the setting is only honoured on the lifespan
