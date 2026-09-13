@@ -2,8 +2,8 @@
 
 from sqladmin import Admin
 
-from ....modules.tools.kyc.admin import KycCaseAdmin, KycDocumentAdmin
 from ....modules.tools.flags.admin import FlagAdmin
+from ....modules.tools.kyc.admin import KycCaseAdmin, KycDocumentAdmin
 from .platform import AuditEventAdmin, RoleAdmin, UserRoleAdmin
 from .tiers import TierAdmin
 from .users import UserAdmin
