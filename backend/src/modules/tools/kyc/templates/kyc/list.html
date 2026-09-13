@@ -1,0 +1,37 @@
+{% extends "platform/base.html" %}
+
+{% block title %}KYC Review Queue — Internal Tools{% endblock %}
+
+{% block content %}
+<h1>KYC Review Queue</h1>
+<p class="muted small">Highest risk first. Claim a case to review it; a second reviewer decides it.</p>
+
+<nav class="tabs">
+  {% for name, label in tabs %}
+  <a class="tab {% if name == tab %}tab-active{% endif %}" href="/tools/kyc?tab={{ name }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Customer ref</th>
+      <th>Name</th>
+      <th>Risk</th>
+      <th>Submitted</th>
+      <th>State</th>
+      <th>Assignee</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="kyc-rows">
+    {% for case in cases %}
+    {% with actions = actions_by_case[case.id], error = None %}
+    {% include "kyc/_row.html" %}
+    {% endwith %}
+    {% else %}
+    <tr><td colspan="7" class="empty">No cases in this tab.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

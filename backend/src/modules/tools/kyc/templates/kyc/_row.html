@@ -1,0 +1,24 @@
+<tr id="kyc-case-{{ case.id }}">
+  <td class="nowrap"><a href="/tools/kyc/{{ case.id }}">{{ case.customer_ref }}</a></td>
+  <td>{{ case.customer_name }}</td>
+  <td class="nowrap"><span class="risk risk-{{ "high" if case.risk_score >= 70 else ("medium" if case.risk_score >= 40 else "low") }}">{{ case.risk_score }}</span></td>
+  <td class="nowrap">{{ case.submitted_at.strftime("%Y-%m-%d") }}</td>
+  <td><span class="chip">{{ case.state }}</span></td>
+  <td class="nowrap">
+    {% if case.assigned_to %}{{ usernames.get(case.assigned_to, case.assigned_to) }}{% else %}<span class="muted">—</span>{% endif %}
+  </td>
+  <td class="nowrap">
+    {% if "claim" in actions %}
+    <button class="button" hx-post="/tools/kyc/{{ case.id }}/claim" hx-vals='{"view": "row"}'
+            hx-target="#kyc-case-{{ case.id }}" hx-swap="outerHTML">Claim</button>
+    {% endif %}
+    {% if "release" in actions %}
+    <button class="button button-quiet" hx-post="/tools/kyc/{{ case.id }}/release" hx-vals='{"view": "row"}'
+            hx-target="#kyc-case-{{ case.id }}" hx-swap="outerHTML">Release</button>
+    {% endif %}
+    {% if "approve" in actions or "reject" in actions or "escalate" in actions or "resume" in actions %}
+    <a class="button button-quiet" href="/tools/kyc/{{ case.id }}">Review</a>
+    {% endif %}
+    {% if error %}<p class="error small">{{ error }}</p>{% endif %}
+  </td>
+</tr>

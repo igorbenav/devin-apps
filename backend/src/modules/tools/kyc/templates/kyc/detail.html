@@ -1,0 +1,10 @@
+{% extends "platform/base.html" %}
+
+{% block title %}KYC case {{ case.customer_ref }} — Internal Tools{% endblock %}
+
+{% block content %}
+<h1>KYC case {{ case.customer_ref }}</h1>
+<p><a href="/tools/kyc">Back to the queue</a></p>
+
+{% include "kyc/_detail.html" %}
+{% endblock %}

@@ -234,3 +234,94 @@ button[type="submit"],
 .empty {
   text-align: center;
 }
+
+.button-quiet {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.button-danger {
+  background: var(--danger);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.tab {
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.tab:hover {
+  text-decoration: none;
+  color: var(--text);
+}
+
+.tab-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.risk {
+  display: inline-block;
+  min-width: 30px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.risk-low {
+  background: #e7f4ec;
+  color: #17663a;
+}
+
+.risk-medium {
+  background: #fdf3e2;
+  color: #8a5a09;
+}
+
+.risk-high {
+  background: #fbe9e7;
+  color: var(--danger);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.actions textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  resize: vertical;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
