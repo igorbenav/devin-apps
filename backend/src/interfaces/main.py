@@ -20,7 +20,10 @@ async def lifespan_with_security(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.PRODUCTION_SECURITY_VALIDATION_ENABLED:
         validate_production_security(settings)
 
-    default_lifespan = lifespan_factory(settings)
+    default_lifespan = lifespan_factory(
+        settings,
+        create_tables_on_startup=settings.CREATE_TABLES_ON_STARTUP,
+    )
 
     async with default_lifespan(app):
         yield

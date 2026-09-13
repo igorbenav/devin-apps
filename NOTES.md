@@ -44,6 +44,12 @@ Append-only. Newest session at the bottom.
   version first, found it fails on a genuinely empty database, and regenerated it as the baseline
   the repo's own migration docs tell you to create. The documented run flow therefore sets
   `CREATE_TABLES_ON_STARTUP=false`, so Alembic owns the schema and does not race `create_all`.
+- **`CREATE_TABLES_ON_STARTUP` was silently ignored (upstream bug, fixed here).** `main.py` supplies
+  its own `lifespan_with_security`, which called `lifespan_factory(settings)` and therefore took the
+  factory's `create_tables_on_startup=True` default — the setting is only honoured on the lifespan
+  `create_application` builds for you. So the app ran `create_all` regardless and the subsequent
+  `alembic upgrade head` died with `DuplicateTableError`. Caught during browser testing; `main.py`
+  now passes `settings.CREATE_TABLES_ON_STARTUP` through. Worth reporting upstream.
 - **Migrate and seed run from the host, not `docker compose exec api`.** The dev image copies only
   `backend/src` and `backend/tests`, so `alembic.ini`, `migrations/` and `scripts/` are not in the
   container (there is a separate `migrate` build target for the migrations alone, and nothing that
