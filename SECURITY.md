@@ -73,7 +73,7 @@ Known, reasoned about, and not fixed. Revisit these if the threat model changes.
 - **`ISSUE_TRACKER_NEW_ISSUE_URL`** is a link target rendered into every page. Point it at your own
   tracker before deploying; a wrong value leaks page paths and usernames to whoever owns that URL.
 - **Unexpected errors render as JSON**, including a 403 on an HTML page. Expected domain errors
-  render inline in the tools. This is a UX gap more than a security one — see [UX.md](UX.md).
+  render inline in the tools. This is a UX gap more than a security one.
 
 ## 4. Out of scope for this app
 

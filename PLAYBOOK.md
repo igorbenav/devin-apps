@@ -3,6 +3,12 @@
 Read this if you have never seen this repo: it takes you from nothing to a working internal
 tool behind login, roles, and the audit log. Expect 30–90 minutes for a simple tool.
 
+You are building for four people at once: the **operator** who works the queue many times a day
+and wants to stop noticing the tool; the **requester** who owns the process and asked for it; the
+**platform admin** who grants access and has to answer "who approved this?"; and the next
+**builder** — usually another Devin session — who should recognise this tool's shape instantly.
+What the operator does most often is what deserves the polish.
+
 One repo, one deployable FastAPI app. Every internal tool is a vertical-slice module under
 `backend/src/modules/tools/<slug>/` that plugs into the shared platform in
 `backend/src/modules/platform/` (login, roles/permissions, audit log, launcher, admin). UI is
@@ -120,6 +126,28 @@ vendored at `backend/src/static/js/htmx.min.js` — never a CDN. The convention 
 `backend/src/static/css/platform.css`. `admin.py` views subclass `PermissionGatedView` +
 `AuditedAdminView` so back-office writes are gated and audited like service writes.
 
+### The UX split: the platform owns the frame, the tool owns the work
+
+The rule that keeps fifty tools coherent is that **if two tools would each make the same UI
+decision, the platform makes it once.** The platform owns (and `platform_sdk` exposes) the page
+shell, nav, current user and roles, the page-header pattern, permission-denied and not-found
+pages, and the formatting filters. Do not re-implement any of those, and if you need one that
+doesn't exist yet, add it to the platform rather than to your tool.
+
+The tool owns its columns, its tabs, its detail layout, its action verbs and its domain language
+— the things that are actually about the work. Within that:
+
+- An action is `hx-post` → service → one re-rendered partial. Refusals render inline, in the page,
+  saying *why* (the maker/checker 403 is the example to copy); never a raw JSON body.
+- Buttons are rendered only when `current_permissions` **and** the domain rule both allow the
+  action — and the service re-checks anyway, because hiding a button is not a control.
+- Filter and tab state lives in the query string, so a pasted link reproduces the screen.
+- Every list has an empty state; every irreversible action asks first.
+
+What the platform *should* own and doesn't yet is tracked under the
+[`shared-layer`](https://github.com/igorbenav/devin-apps/labels/shared-layer) label. If you find
+yourself building one of those, build it in the platform and close the issue.
+
 ## 6. Migration and seed
 
 Autogenerate, then read it before applying it:
@@ -166,6 +194,8 @@ permission string renamed without a migration for the rows already holding the o
 - Migration generated, reviewed, applied; seed runs through `scripts/seed_tools.py`.
 - Pages and at least one HTMX action work for a user holding the permission — and the tool is
   invisible on the launcher for a user who does not.
+- The UX split above is respected: shared shell reused, failures visible in the page, lists have
+  an empty state, and tab/filter state is in the URL.
 - `uv run pytest tests/unit src/modules/tools`, `uv run --no-sync lint-imports` and
   `pre-commit run --all-files` pass.
 - Anything you guessed at, decided alone, or would flag to a security reviewer is called out in the

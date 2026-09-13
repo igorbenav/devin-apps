@@ -1,8 +1,8 @@
 # Operating this platform with Devin
 
-`UX.md` argues about what the screens should do. This is the other half: which **Devin features** to
-actually turn on so that "ask for an internal tool and get one" works for a non-engineer, the way
-Power Apps does — and where that comparison breaks.
+`PLAYBOOK.md` is how a tool gets built. This is the other half: which **Devin features** to actually
+turn on so that "ask for an internal tool and get one" works for a non-engineer, the way Power Apps
+does — and where that comparison breaks.
 
 v1 scope: desktop only, ten-ish tools, one repo, one deployment.
 
@@ -31,7 +31,7 @@ Four handoffs, each with a Devin feature behind it:
 
 ### Playbooks (three, not thirty)
 
-1. **`Add an internal tool`** — takes a filled-in brief (the ten questions in `UX.md` §5) and runs the
+1. **`Add an internal tool`** — takes a filled-in brief (the ten questions in §3) and runs the
    `PLAYBOOK.md` procedure: `bp new tool <slug>`, model the domain, services with audit, permissions
    on the manifest, HTMX pages, migration, tests, PR. Definition of done included, so the session
    stops at the right place.
@@ -51,7 +51,7 @@ repo so it always loads):
 - Tools import `src.platform_sdk` and nothing else from the platform; import-linter enforces it.
 - Every state change goes through a service function that records an audit event. No writes in routes.
 - Adding a permission does not grant it — role assignment is deliberate.
-- The UX contract from `UX.md` §4: use the shared components, don't invent a table.
+- The UX split in `PLAYBOOK.md` §5: the platform owns the frame, don't invent a table.
 - The invariants in `ARCHITECTURE.md`: audit in the same transaction, no writes in routes,
   permissions resolved per request.
 
@@ -96,7 +96,23 @@ Power Apps' "the app is self-documenting" property, and it costs nothing to enab
 Everything above is configuration. The part that makes this a product rather than a GitHub
 workflow is the **in-app intake**, and it is built:
 
-- **`/tools/intake`**, behind the `tools.request` permission: the ten brief questions as a form. On
+The quality of what comes out tracks the quality of the ask, so the brief is ten fixed questions:
+
+1. Who uses this, and what is their job title?
+1. What decision or action does it let them take that they can't take now?
+1. What do they do today instead (spreadsheet, email, Power Apps, nothing)?
+1. What are the states a record moves through, and who can move it between them?
+1. What must never happen? (e.g. the same person approves their own case)
+1. What has to be provable afterwards, to whom?
+1. Where does the data come from, and where does it need to go?
+1. How many records a day, and how many people?
+1. What does success look like in a month — time saved, errors avoided, a number?
+1. What is explicitly out of scope for v1?
+
+Questions 4, 5 and 6 decide whether the result is a real workflow tool or a CRUD grid — they are
+what made the KYC tool worth demoing. Question 9 is the one that lets the VP kill a tool later.
+
+- **`/tools/intake`**, behind the `tools.request` permission: those ten questions as a form. On
   submit the platform calls `POST /v1/sessions` with the brief rendered into the *Add an internal
   tool* playbook, tagged `tool:<slug>`, capped with `max_acu_limit`, and stores the session URL.
   The list below the form shows each brief's status and session link.

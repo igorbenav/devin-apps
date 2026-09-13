@@ -173,7 +173,6 @@ uv run bp deploy generate prod --workers 8
 | [PLAYBOOK.md](PLAYBOOK.md)                           | How to add a tool, step by step — the file a Devin session is pointed at  |
 | [DEPLOY.md](DEPLOY.md)                               | The deployment runbook: env, migrations, preflight, upgrades, rollback    |
 | [ARCHITECTURE.md](ARCHITECTURE.md)                   | How the repo is organised, the tool contract, and the invariants          |
-| [UX.md](UX.md)                                       | Personas, jobs to be done, and the shared UX contract tools must follow   |
 | [SECURITY.md](SECURITY.md)                           | The security model: controls, operator duties, accepted risk              |
 | [DEVIN-OPERATING-MODEL.md](DEVIN-OPERATING-MODEL.md) | Playbooks, knowledge, automations and reviews for running this with Devin |
 
