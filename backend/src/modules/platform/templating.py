@@ -8,11 +8,13 @@ the shared layout with ``{% extends "platform/base.html" %}``.
 
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
 
+from ...infrastructure.config.settings import settings
 from .dependencies import ViewerContext
 from .registry import registered_tools, tool_template_dirs, tools_for
 
@@ -40,6 +42,36 @@ def refresh_template_loader() -> None:
     templates.env.loader = ChoiceLoader(loaders)
 
 
+ISSUE_LABEL = "tool-bug"
+
+ISSUE_BODY = """**What happened**
+
+<!-- what you did, and what the page did instead -->
+
+**Tool:** {tool}
+**Page:** {page}
+**Reported by:** {reporter}
+"""
+
+
+def report_issue_url(request: Request, viewer: ViewerContext | None) -> str:
+    """A prefilled issue for the page the viewer is on.
+
+    The label is what an automation watches for, so a report from inside a tool arrives as a Devin prompt with the tool,
+    page and reporter already in it — the context a bug report usually loses.
+    """
+    page = request.url.path
+    tool = next((spec.name for spec in registered_tools() if page.startswith(spec.route_prefix)), "Platform")
+    query = urlencode(
+        {
+            "labels": ISSUE_LABEL,
+            "title": f"[{tool}] ",
+            "body": ISSUE_BODY.format(tool=tool, page=page, reporter=viewer.user["username"] if viewer else "unknown"),
+        }
+    )
+    return f"{settings.ISSUE_TRACKER_NEW_ISSUE_URL}?{query}"
+
+
 def render(
     request: Request,
     template_name: str,
@@ -53,6 +85,7 @@ def render(
         "permissions": viewer.permissions if viewer else set(),
         "nav_tools": tools_for(viewer.permissions) if viewer else [],
         "all_tools": registered_tools(),
+        "report_issue_url": report_issue_url(request, viewer),
     }
     payload.update(context or {})
 

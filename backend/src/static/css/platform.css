@@ -325,3 +325,51 @@ button[type="submit"],
   gap: 8px;
   flex-wrap: wrap;
 }
+
+a.link-button {
+  text-decoration: none;
+  display: inline-block;
+}
+
+.flash {
+  color: #1a7f5a;
+  background: #e9f7f1;
+  border: 1px solid #bfe5d5;
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.brief-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+
+.brief-form label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 10px;
+}
+
+.brief-form textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  resize: vertical;
+}
+
+.brief-form button[type="submit"] {
+  align-self: flex-start;
+}
+
+.prompt {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}

@@ -1,0 +1,28 @@
+{% extends "platform/base.html" %}
+
+{% block title %}{{ item.title }} — Tool Requests{% endblock %}
+
+{% block content %}
+<p class="small"><a href="/tools/intake">← All requests</a></p>
+<h1>{{ item.title }}</h1>
+<p class="muted small">
+  Requested by {{ requester }} on {{ item.created_at.strftime("%Y-%m-%d") }} · module
+  <code>backend/src/modules/tools/{{ item.slug_hint }}/</code>
+</p>
+
+<div id="intake-status">
+  {% include "intake/_status.html" %}
+</div>
+
+<h2 class="small">The brief</h2>
+<dl class="facts">
+  {% for field, question in questions %}
+  <dt>{{ question }}</dt>
+  <dd>{{ item[field] }}</dd>
+  {% endfor %}
+</dl>
+
+<h2 class="small">The prompt this session runs</h2>
+<p class="muted small">Copy this into a Devin session if you would rather start it yourself.</p>
+<pre class="prompt">{{ prompt }}</pre>
+{% endblock %}

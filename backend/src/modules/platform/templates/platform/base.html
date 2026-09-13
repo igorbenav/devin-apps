@@ -30,6 +30,7 @@
           <span class="chip chip-muted">{% if viewer.user.is_superuser %}superuser{% else %}no roles{% endif %}</span>
           {% endfor %}
         </span>
+        <a class="link-button" href="{{ report_issue_url }}" rel="noopener noreferrer" target="_blank">Report an issue</a>
         <button class="link-button" hx-post="/logout" hx-swap="none">Log out</button>
       </div>
     </header>

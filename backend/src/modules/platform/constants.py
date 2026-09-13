@@ -28,7 +28,7 @@ ROLE_REVIEWER: Final = "reviewer"
 ROLE_ADMIN: Final = "admin"
 
 ANALYST_GRANTS: Final[tuple[str, ...]] = ("kyc.review", "flags.read")
-REVIEWER_GRANTS: Final[tuple[str, ...]] = (*ANALYST_GRANTS, "kyc.approve", "kyc.escalate")
+REVIEWER_GRANTS: Final[tuple[str, ...]] = (*ANALYST_GRANTS, "kyc.approve", "kyc.escalate", "tools.request")
 
 ROLE_GRANTS: Final[dict[str, tuple[str, tuple[str, ...]]]] = {
     ROLE_ANALYST: ("Reviews KYC cases and reads risk flags", ANALYST_GRANTS),

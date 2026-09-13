@@ -79,10 +79,26 @@ real environment.** Override the password with `DEMO_USER_PASSWORD`.
 | User         | Role     | Password    | Permissions                                              |
 | ------------ | -------- | ----------- | -------------------------------------------------------- |
 | `analyst`    | analyst  | `Demo1234!` | `kyc.review`, `flags.read`                               |
-| `reviewer`   | reviewer | `Demo1234!` | analyst + `kyc.approve`, `kyc.escalate`                  |
+| `reviewer`   | reviewer | `Demo1234!` | analyst + `kyc.approve`, `kyc.escalate`, `tools.request` |
 | `toolsadmin` | admin    | `Demo1234!` | all, incl. `flags.write`, `audit.read`, `platform.admin` |
 
 Permissions are flat dotted strings on a role, with no hierarchy. Superusers pass every check.
+
+### Requesting a tool from inside the app
+
+`/tools/intake` (needs `tools.request`) is how someone who is not on the platform team asks for a
+tool: they answer the ten-question brief from [UX.md](UX.md), the answers are stored, and the app
+calls `POST /v1/sessions` to start a Devin session from them — tagged `tool:<slug>` so cost is
+attributable per tool, capped with `max_acu_limit`, and pointed at the add-a-tool playbook. A human
+still reviews and merges the PR; the tool then appears in the launcher for whoever holds its
+permission.
+
+The API key lives in `DEVIN_API_KEY` on the server and is never rendered or logged. Without it the
+page still records briefs and shows the generated prompt to copy, so the demo works either way.
+Submissions are capped per requester (`MAX_REQUESTS_PER_DAY`) because each one spends money. Every
+page also carries a **Report an issue** link that opens a prefilled, `tool-bug`-labelled issue with
+the tool, page and reporter filled in — the trigger an automation turns into a fix session (see
+[DEVIN-OPERATING-MODEL.md](DEVIN-OPERATING-MODEL.md)).
 
 ### Swapping Google OAuth for Entra ID / OIDC
 
