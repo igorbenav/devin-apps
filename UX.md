@@ -9,9 +9,8 @@ app looks the same, logs in the same way, appears in the same launcher, and an o
 built without a platform team. That consistency is a UX property, and on this platform it has to
 come from the shared layer, because nobody is going to hand-police fifty tools.
 
-Grounded in the app as it stands at `eaf283c` (launcher, KYC queue, feature flags, `/audit`,
-`/admin`). Gaps below are things I checked in the templates, not guesses — where I am guessing about
-the customer's actual working habits, I say so.
+Gaps below were read off the templates, not guessed — where this guesses about the customer's
+actual working habits, it says so.
 
 ## 1. The four people
 
@@ -102,7 +101,7 @@ would test against.
 1. *As an admin, I can grant a role without SQLAdmin* — a small "people and roles" page, because
    SQLAdmin is a database editor and hands it the whole schema.
 1. *As a requester, I can report a problem from the page I'm on,* with the tool, page and my username
-   prefilled into a GitHub issue — that issue is then a ready-made Devin prompt.
+   prefilled into a GitHub issue — that issue is then a ready-made Devin prompt. *Built.*
 1. *As a requester, I can see whether anyone used this tool last month.* → Usage counts derived from
    the audit table; no new tracking infrastructure.
 
@@ -137,9 +136,9 @@ domain language. That is the right split — the tool owns the *work*, the platf
 
 ## 5. Development UX: how a request becomes a tool
 
-The biggest single lever on quality is the intake, not the code. Today the Requester writes a
-paragraph in Slack; the Builder guesses the rest. Proposal — a `TOOL_BRIEF.md` template in the repo,
-ten questions, answered before a session starts:
+The biggest single lever on quality is the intake, not the code: a paragraph in Slack makes the
+Builder guess the rest. These are the ten questions `/tools/intake` asks, and the ones to ask
+anywhere else a request arrives:
 
 1. Who uses this, and what is their job title?
 1. What decision or action does it let them take that they can't take now?
@@ -156,27 +155,27 @@ Questions 4, 5 and 6 are the ones that decide whether the result is a real workf
 grid — they are exactly what made the KYC session produce something worth demoing. Question 9 is the
 one that lets the VP kill a tool later.
 
-The brief feeds `bp new tool` and the playbook's definition of done should grow UX rows:
-every action has a busy state, every failure has a visible message, every list has an empty state,
-every page works at 768px, and the tool's page header names its owner.
+The brief feeds `bp new tool` and the session that follows it. The UX bar a finished tool should
+meet: every action has a busy state, every failure has a visible message, every list has an empty
+state, and the page header names the tool's owner.
 
-## 6. Suggested order of work
+## 6. What the shared layer still doesn't own
 
-Sized in Devin sessions, assuming one session ≈ a substantial PR with tests.
+Roughly in the order they compound, each about half a session to a session of work:
 
-| Slice                      | Contents                                                                                                            | Size |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---- |
-| A. Feedback and failure    | Busy states, flash region, HTML 403/404, inline form errors, confirm on irreversible actions                        | ~0.5 |
-| B. The list component      | Shared table partial + search/sort/paging helpers, URL-state conventions, formatting filters                        | ~1   |
-| C. Launcher and metadata   | Tool owner and feedback link in the manifest, request-access flow, per-tool description on the card, "my work" stub | ~0.5 |
-| D. Audit usability         | Actor/entity/date filters, paging, CSV export, shared entity-audit partial, usage counts per tool                   | ~1   |
-| E. Access without SQLAdmin | People-and-roles page behind `platform.admin`, audited                                                              | ~0.5 |
-| F. Polish pass             | One breakpoint, focus styles, tab order, print view for a decided case                                              | ~0.5 |
-| G. Intake                  | `TOOL_BRIEF.md`, generator prompts, playbook definition-of-done rows                                                | ~0.5 |
+1. **Feedback and failure** — busy states, a flash region, HTML 403/404 pages, inline form errors,
+   confirmation on irreversible actions.
+1. **The list component** — a shared table partial with search, sort and paging, URL-state
+   conventions, and formatting filters.
+1. **Launcher and metadata** — tool owner and feedback link on the manifest, a request-access flow,
+   a cross-tool "my work" view.
+1. **Audit usability** — actor, entity and date filters, paging past 200, export, a shared
+   entity-audit partial, per-tool usage counts.
+1. **Access without SQLAdmin** — a people-and-roles page behind `platform.admin`.
+1. **Polish** — one breakpoint, focus styles, tab order.
 
-A and B are the ones that compound: they are what stops tools 3–50 from each inventing their own
-table and their own error handling. G is the cheapest thing on the list and probably the highest
-leverage per hour spent.
+The first two are what stop tools 3–50 from each inventing their own table and their own error
+handling; everything else is a convenience until the tool count grows.
 
 ## 7. Things I don't know and would ask the customer
 

@@ -31,7 +31,7 @@ Four handoffs, each with a Devin feature behind it:
 
 ### Playbooks (three, not thirty)
 
-1. **`Add an internal tool`** — takes a filled-in `TOOL_BRIEF.md` (see `UX.md` §5) and runs the
+1. **`Add an internal tool`** — takes a filled-in brief (the ten questions in `UX.md` §5) and runs the
    `PLAYBOOK.md` procedure: `bp new tool <slug>`, model the domain, services with audit, permissions
    on the manifest, HTMX pages, migration, tests, PR. Definition of done included, so the session
    stops at the right place.
@@ -52,6 +52,8 @@ repo so it always loads):
 - Every state change goes through a service function that records an audit event. No writes in routes.
 - Adding a permission does not grant it — role assignment is deliberate.
 - The UX contract from `UX.md` §4: use the shared components, don't invent a table.
+- The invariants in `ARCHITECTURE.md`: audit in the same transaction, no writes in routes,
+  permissions resolved per request.
 
 This repo already has an auto-generated index note; these are the opinionated ones worth writing by hand.
 
@@ -69,11 +71,11 @@ is a way to burn ACUs.
 
 ### Devin Review + code scans
 
-- Devin Review on all PRs to this repo, Auto-Fix on. It already caught two real bugs on PR #7 (test
-  packages breaking Alembic's model discovery, and a fresh database missing tool tables) that the
-  test suite did not.
-- A periodic **code scan** (security profile) over the repo — it is the same class of work as the
-  manual review in `SECURITY-REVIEW.md`, minus the person.
+- Devin Review on all PRs to this repo, Auto-Fix on. It has caught real bugs the test suite did not
+  — test packages breaking Alembic's model discovery, a fresh database missing tool tables,
+  concurrent writes that needed row locks.
+- A periodic **code scan** (security profile) over the repo — the same class of work as the manual
+  review behind `SECURITY.md`, minus the person.
 
 ### Ask Devin / the repo index
 
@@ -89,27 +91,27 @@ Power Apps' "the app is self-documenting" property, and it costs nothing to enab
 - **`max_acu_limit`** on automation-started sessions, so a malformed request cannot run away.
 - Sessions synced to a Slack thread, so the requester watches progress where they already are.
 
-## 3. The one piece worth building in the app itself
+## 3. The piece that lives in the app itself
 
-Everything above is configuration. The single feature that would make this feel like a product
-rather than a GitHub workflow is an **in-app intake**, using the Devin API:
+Everything above is configuration. The part that makes this a product rather than a GitHub
+workflow is the **in-app intake**, and it is built:
 
-- A **"Request a tool"** page behind login: the ten `TOOL_BRIEF.md` questions as a form. On submit,
-  the platform calls `POST /v1/sessions` with the brief rendered into the *Add an internal tool*
-  playbook, tagged with the requester and an intended slug, and stores the returned session URL.
-- A **"Report an issue"** button in the shared page header: opens a prefilled GitHub issue (tool,
-  page, user, what happened) labeled `tool-bug` — which the automation above turns into a session.
-- A small **"Requests"** page listing submitted briefs with their session status and PR link, so a
-  requester can see their tool being built.
+- **`/tools/intake`**, behind the `tools.request` permission: the ten brief questions as a form. On
+  submit the platform calls `POST /v1/sessions` with the brief rendered into the *Add an internal
+  tool* playbook, tagged `tool:<slug>`, capped with `max_acu_limit`, and stores the session URL.
+  The list below the form shows each brief's status and session link.
+- **"Report an issue"** in the shared page header: a prefilled GitHub issue (tool, page, user, what
+  happened) that the `tool-bug` automation turns into a session.
 
 Why the API and not just a link to Slack: the brief is the thing that determines output quality, and
 a form gets a complete brief where a Slack message gets three sentences. It is also the demo that
 answers the VP's real question — *can my ops lead get a tool without filing a ticket with my team?*
 
-Cost and caveats, honestly: this needs a Devin API key held server-side (org secret, never in the
-page), it should be gated behind a `tools.request` permission, and a rate limit is warranted here
-even though the rest of the app is unauthenticated-free — it is the one endpoint that spends money.
-Roughly half a session to build.
+Operating it: `DEVIN_API_KEY` is held server-side (never rendered into the page); without it the
+brief is still stored and the prompt shown to copy, rather than pretending a session started. Each
+requester is capped per day and dispatch is claimed in the database before the API call, so a
+double click cannot buy two sessions. The brief is requester-typed text going into an agent prompt
+— prompt injection is mitigated by the ACU cap, the tag, and the human merge, not solved.
 
 ## 4. Where this does not match Power Apps, and you should say so out loud
 

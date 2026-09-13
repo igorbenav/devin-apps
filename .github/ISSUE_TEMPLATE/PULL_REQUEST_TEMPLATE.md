@@ -1,20 +1,18 @@
-# Pull Request Template for FastAPI-boilerplate
+## What changed
 
-## Description
-Please provide a clear and concise description of what your pull request is about.
+Briefly, and why. A reviewer who hasn't seen the diff should get the intent from this.
 
-## Changes
-Briefly list the changes you've made. If applicable, also link any relevant issues or pull requests.
+## Scope
 
-## Tests
-Describe the tests you added or modified to cover your changes, if applicable.
+- [ ] Tool change: everything is inside `backend/src/modules/tools/<slug>/`
+- [ ] Shared-layer change (say why it could not live in a tool)
+- [ ] Migration included and reviewed
+- [ ] Permission added (and the `ROLE_GRANTS` decision made)
 
-## Checklist
-- [ ] I have read the [CONTRIBUTING](CONTRIBUTING.md) document.
-- [ ] My code follows the code style of this project.
-- [ ] I have added necessary documentation (if appropriate).
-- [ ] I have added tests that cover my changes (if applicable).
-- [ ] All new and existing tests passed.
+## Verification
 
-## Additional Notes
-Include any additional information that you think is important for reviewers to know.
+How this was checked: tests, `lint-imports`, and anything exercised in a browser.
+
+## Anything you guessed at
+
+Decisions made without being told, and anything a security reviewer should look at.

@@ -25,6 +25,8 @@ backend/src/modules/tools/<slug>/
 Tools import the platform through one façade, `src.platform_sdk`, and nothing else of the
 platform: `uv run --no-sync lint-imports` (backend/) enforces the layering, that no tool
 imports another tool, and that the platform never imports a tool.
+[ARCHITECTURE.md](ARCHITECTURE.md) explains why the repo is shaped this way and lists the
+invariants a tool must not break.
 
 ## 1. Generate the module
 
@@ -166,5 +168,5 @@ permission string renamed without a migration for the rows already holding the o
   invisible on the launcher for a user who does not.
 - `uv run pytest tests/unit src/modules/tools`, `uv run --no-sync lint-imports` and
   `pre-commit run --all-files` pass.
-- Anything you guessed at, decided alone, or would flag to a security reviewer is appended to
-  `NOTES.md`.
+- Anything you guessed at, decided alone, or would flag to a security reviewer is called out in the
+  PR description — that is where a reviewer will look for it.

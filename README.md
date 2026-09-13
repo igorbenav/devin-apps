@@ -84,7 +84,7 @@ views, permissions and seeds from each `ToolSpec` at startup, so adding a tool e
 file except which seeded role gets the new permission. Tools reach the platform through one
 façade, `src.platform_sdk`, and `lint-imports` enforces that — no tool imports another tool, and
 the platform never imports a tool. The reasoning, and what this looks like at 50 tools, is in
-[MODULARITY.md](MODULARITY.md).
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## What the platform gives every tool
 
@@ -113,8 +113,8 @@ prompt to copy instead of pretending a session started. A human always reviews a
 
 ## Security
 
-[SECURITY-REVIEW.md](SECURITY-REVIEW.md) is the full review — findings, what was fixed, what was
-accepted and why. Production startup refuses to run on an unsafe configuration (weak
+[SECURITY.md](SECURITY.md) is the security model — the controls in place, what the operator has to
+get right, and the residual risk that was accepted and why. Production startup refuses to run on an unsafe configuration (weak
 `SECRET_KEY`, `CSRF_ENABLED=false`, insecure session cookies, a non-Redis session backend,
 wildcard CORS with credentials), and `python -m scripts.preflight` checks the same rules plus the
 database revision and Redis before you move traffic.
@@ -172,11 +172,10 @@ uv run bp deploy generate prod --workers 8
 | ---------------------------------------------------- | ------------------------------------------------------------------------- |
 | [PLAYBOOK.md](PLAYBOOK.md)                           | How to add a tool, step by step — the file a Devin session is pointed at  |
 | [DEPLOY.md](DEPLOY.md)                               | The deployment runbook: env, migrations, preflight, upgrades, rollback    |
-| [MODULARITY.md](MODULARITY.md)                       | Why a tool is one directory, and what the repo looks like at 50 tools     |
+| [ARCHITECTURE.md](ARCHITECTURE.md)                   | How the repo is organised, the tool contract, and the invariants          |
 | [UX.md](UX.md)                                       | Personas, jobs to be done, and the shared UX contract tools must follow   |
-| [SECURITY-REVIEW.md](SECURITY-REVIEW.md)             | The security review: findings, fixes, accepted risks                      |
+| [SECURITY.md](SECURITY.md)                           | The security model: controls, operator duties, accepted risk              |
 | [DEVIN-OPERATING-MODEL.md](DEVIN-OPERATING-MODEL.md) | Playbooks, knowledge, automations and reviews for running this with Devin |
-| [NOTES.md](NOTES.md)                                 | Build log: decisions, tradeoffs, what was kept from generated code        |
 
 ## Upstream
 
