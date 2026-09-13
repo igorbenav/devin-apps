@@ -305,7 +305,11 @@ def create_application(
     _security_headers_enabled = getattr(settings, "SECURITY_HEADERS_ENABLED", True)
     if _security_headers_enabled:
         _environment = settings.ENVIRONMENT.value if hasattr(settings, "ENVIRONMENT") else EnvironmentOption.DEVELOPMENT.value
-        application.add_middleware(SecurityHeadersMiddleware, environment=_environment)
+        application.add_middleware(
+            SecurityHeadersMiddleware,
+            environment=_environment,
+            docs_paths=[_docs_url, _redoc_url] if show_docs else [],
+        )
 
     if show_docs:
         docs_router = APIRouter()

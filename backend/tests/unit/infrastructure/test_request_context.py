@@ -43,3 +43,14 @@ def test_forwarded_for_is_read_one_hop_back():
 def test_short_forwarded_chain_falls_back_to_the_socket():
     request = _request({"X-Forwarded-For": "1.2.3.4"})
     assert _client_ip(request, trusted_proxy_hops=2) == "10.0.0.9"
+
+
+def test_forwarded_value_that_is_not_an_address_falls_back_to_the_socket():
+    """The header reaches a varchar audit column; a junk hop must not be written or break the insert."""
+    request = _request({"X-Forwarded-For": "1.2.3.4, not-an-ip"})
+    assert _client_ip(request, trusted_proxy_hops=1) == "10.0.0.9"
+
+
+def test_oversized_forwarded_header_falls_back_to_the_socket():
+    request = _request({"X-Forwarded-For": "9." * 5000 + "203.0.113.7"})
+    assert _client_ip(request, trusted_proxy_hops=1) == "10.0.0.9"

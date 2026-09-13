@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from ....infrastructure.dependencies import AsyncSessionDep
-from ...api_keys.dependencies import require_api_key
+from ...api_keys.dependencies import enforce_api_key_rate_limit, require_api_key
 from ...api_keys.enums import KeyPermissionAction, KeyPermissionResource
 from ...api_keys.schemas import APIKeyValidationResponse
 from . import service
@@ -17,11 +17,14 @@ from .schemas import KEY_MAX_LENGTH, FlagEvaluation
 
 SUBJECT_MAX_LENGTH = 200
 
+EVALUATE_RATE_LIMIT = 600
+EVALUATE_RATE_PERIOD = 60
+
 router = APIRouter(tags=["flags"])
 
 CallerDep = Annotated[
     APIKeyValidationResponse,
-    Depends(require_api_key(KeyPermissionResource.WILDCARD, KeyPermissionAction.READ)),
+    Depends(require_api_key(KeyPermissionResource.FEATURE_FLAGS, KeyPermissionAction.READ)),
 ]
 
 
@@ -33,6 +36,8 @@ async def evaluate_flag(
     subject: Annotated[str, Query(description="Stable identifier the rollout is bucketed by", max_length=SUBJECT_MAX_LENGTH)],
 ) -> FlagEvaluation:
     """Whether ``key`` is on for ``subject``, and why."""
+    await enforce_api_key_rate_limit(caller, limit=EVALUATE_RATE_LIMIT, period=EVALUATE_RATE_PERIOD)
+
     flag = await service.get_flag_by_key(db, key)
     enabled, reason = service.evaluate(flag, subject)
     return FlagEvaluation(key=key, enabled=enabled, reason=reason)

@@ -466,3 +466,28 @@ async def test_validate_api_key_rejects_deleted_owner(api_key_service, db_sessio
 
     assert validation.is_valid is False
     assert "Invalid API key" in validation.error_message
+
+
+@pytest.mark.asyncio
+async def test_feature_flags_scope_does_not_open_other_resources(
+    api_key_service, db_session: AsyncSession, test_user: dict, test_api_key
+):
+    """The evaluate endpoint's key is scoped to feature_flags, not to everything the key API can address."""
+    permission_data = KeyPermissionCreate(
+        api_key_id=test_api_key["id"],
+        resource=KeyPermissionResource.FEATURE_FLAGS,
+        action=KeyPermissionAction.READ,
+        is_allowed=True,
+    )
+    await crud_key_permissions.create(db=db_session, object=permission_data)
+
+    allowed = await api_key_service.validate_api_key(
+        api_key=test_api_key["api_key"], resource="feature_flags", action="read", db=db_session
+    )
+    assert allowed.is_valid is True
+
+    for resource, action in (("analytics", "read"), ("admin", "read"), ("feature_flags", "write")):
+        denied = await api_key_service.validate_api_key(
+            api_key=test_api_key["api_key"], resource=resource, action=action, db=db_session
+        )
+        assert denied.is_valid is False, f"{resource}:{action} should not be permitted"

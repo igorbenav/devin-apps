@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.responses import RedirectResponse
 
 from ...modules.common.constants import GENERIC_ERROR_MESSAGE
+from ...modules.platform.service import record_login, record_logout
 from ...modules.user.crud import crud_users
 from ...modules.user.enums import OAuthProvider
 from ..dependencies import AsyncSessionDep, OAuth2FormDep
@@ -77,6 +78,8 @@ async def login(
     )
     crud_auth.sessions.set_session_cookies(response, session_id, csrf_token)
 
+    await record_login(db, int(crud_auth.repo.user_id(user)), method="api")
+
     return {"csrf_token": csrf_token}
 
 
@@ -98,6 +101,7 @@ async def login(
 )
 async def logout(
     response: Response,
+    db: AsyncSessionDep,
     principal: Annotated[Principal, Depends(get_current_principal)],
 ) -> dict[str, str]:
     """Logout endpoint to terminate the session and clear cookies (CSRF-protected)."""
@@ -105,6 +109,8 @@ async def logout(
     if session_id:
         await crud_auth.sessions.revoke(session_id, owner_id=principal.user_id)
     crud_auth.sessions.clear_session_cookies(response)
+
+    await record_logout(db, int(principal.user_id), method="api")
 
     return {"message": "Logged out successfully"}
 
@@ -277,6 +283,8 @@ async def oauth_google_callback(
         )
         crud_auth.sessions.set_session_cookies(response, session_id, csrf_token)
 
+        await record_login(db, int(user_id), method="oauth:google")
+
         await oauth_state_storage.delete(state)
 
         if response_format == "json":
@@ -313,8 +321,7 @@ async def check_auth(
     principal: Annotated[Principal | None, Depends(get_optional_principal)],
     db: AsyncSessionDep,
 ) -> dict[str, Any]:
-    """
-    Check if the user is authenticated and return basic user information.
+    """Check if the user is authenticated and return basic user information.
 
     This is useful for clients to verify authentication status. It responds to both
     authenticated and anonymous callers (anonymous gets ``authenticated: false``

@@ -8,6 +8,8 @@ from crudauth.exceptions import ForbiddenException, UnauthorizedException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
+from src.infrastructure.rate_limit.exceptions import RateLimitException
+from src.modules.api_keys import dependencies
 from src.modules.api_keys.dependencies import require_api_key
 from src.modules.api_keys.enums import KeyPermissionAction, KeyPermissionResource
 from src.modules.api_keys.schemas import APIKeyValidationResponse
@@ -144,21 +146,21 @@ def test_buckets_differ_between_flags_for_the_same_subject() -> None:
 
 
 async def test_evaluate_endpoint_rejects_a_missing_api_key(db_session: AsyncSession) -> None:
-    dependency = require_api_key(KeyPermissionResource.WILDCARD, KeyPermissionAction.READ)
+    dependency = require_api_key(KeyPermissionResource.FEATURE_FLAGS, KeyPermissionAction.READ)
 
     with pytest.raises(UnauthorizedException, match="X-API-Key"):
         await dependency(db=db_session, service=_StubKeyService(valid=True), api_key=None)
 
 
 async def test_evaluate_endpoint_rejects_an_invalid_api_key(db_session: AsyncSession) -> None:
-    dependency = require_api_key(KeyPermissionResource.WILDCARD, KeyPermissionAction.READ)
+    dependency = require_api_key(KeyPermissionResource.FEATURE_FLAGS, KeyPermissionAction.READ)
 
     with pytest.raises(UnauthorizedException, match="Invalid API key"):
         await dependency(db=db_session, service=_StubKeyService(valid=False), api_key="fai_deadbeef_nope")
 
 
 async def test_evaluate_endpoint_accepts_a_valid_api_key(db_session: AsyncSession) -> None:
-    dependency = require_api_key(KeyPermissionResource.WILDCARD, KeyPermissionAction.READ)
+    dependency = require_api_key(KeyPermissionResource.FEATURE_FLAGS, KeyPermissionAction.READ)
 
     caller = await dependency(db=db_session, service=_StubKeyService(valid=True), api_key="fai_deadbeef_ok")
 
@@ -197,3 +199,36 @@ def test_admin_view_is_permission_gated() -> None:
     assert FlagAdmin().is_accessible(cast(Request, open_request)) is False
     assert FlagAdmin().is_visible(cast(Request, open_request)) is False
     assert FlagAdmin().is_accessible(cast(Request, admin_request)) is True
+
+
+async def test_evaluate_is_rate_limited_per_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Buckets by key id: one noisy integration must not spend another caller's budget."""
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_increment(key: str, limit: int, period: int, fail_open: bool | None = None) -> tuple[int, bool]:
+        calls.append((key, limit, period))
+        return len(calls), len(calls) > 1
+
+    monkeypatch.setattr(
+        dependencies, "get_settings", lambda: SimpleNamespace(RATE_LIMITER_ENABLED=True, RATE_LIMITER_FAIL_OPEN=True)
+    )
+    monkeypatch.setattr(dependencies, "increment_and_check", fake_increment)
+    caller = APIKeyValidationResponse(is_valid=True, api_key_id=42, user_id=1)
+
+    await dependencies.enforce_api_key_rate_limit(caller, limit=600, period=60)
+    with pytest.raises(RateLimitException):
+        await dependencies.enforce_api_key_rate_limit(caller, limit=600, period=60)
+
+    assert calls[0] == ("ratelimit:apikey:42", 600, 60)
+
+
+async def test_evaluate_is_unlimited_while_the_rate_limiter_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With RATE_LIMITER_ENABLED off there is no backend to count against; the route stays open."""
+
+    async def fail(*args: Any, **kwargs: Any) -> tuple[int, bool]:
+        raise AssertionError("the limiter backend must not be touched when disabled")
+
+    monkeypatch.setattr(dependencies, "get_settings", lambda: SimpleNamespace(RATE_LIMITER_ENABLED=False))
+    monkeypatch.setattr(dependencies, "increment_and_check", fail)
+
+    await dependencies.enforce_api_key_rate_limit(APIKeyValidationResponse(is_valid=True, api_key_id=1), limit=1, period=1)

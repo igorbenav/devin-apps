@@ -12,13 +12,14 @@ def _create_app_with_middleware(
     security: bool = False,
     environment: str = "development",
     max_age: int = 60,
+    docs_paths: list[str] | None = None,
 ) -> FastAPI:
     app = FastAPI()
 
     if cache:
         app.add_middleware(ClientCacheMiddleware, max_age=max_age)
     if security:
-        app.add_middleware(SecurityHeadersMiddleware, environment=environment)
+        app.add_middleware(SecurityHeadersMiddleware, environment=environment, docs_paths=docs_paths)
 
     @app.get("/api/v1/users")
     async def api_route():
@@ -135,6 +136,22 @@ async def test_csp_relaxes_inline_script_for_sqladmin():
     assert "script-src 'self' 'unsafe-inline'" in resp.headers["content-security-policy"]
 
 
+@pytest.mark.asyncio
+async def test_csp_allows_the_swagger_bundle_on_the_docs_path():
+    app = _create_app_with_middleware(security=True, docs_paths=["/docs"])
+
+    @app.get("/docs")
+    async def docs_route():
+        return {"ok": True}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        docs = await client.get("/docs")
+        other = await client.get("/audit")
+
+    assert "https://cdn.jsdelivr.net" in docs.headers["content-security-policy"]
+    assert "cdn.jsdelivr.net" not in other.headers["content-security-policy"]
+
+
 # === SameOriginMiddleware ===
 
 
@@ -148,6 +165,10 @@ def _same_origin_app(allowed_origins: list[str] | None = None) -> FastAPI:
 
     @app.get("/login")
     async def login_page():
+        return {"ok": True}
+
+    @app.post("/api/v1/users")
+    async def api_route():
         return {"ok": True}
 
     return app
@@ -170,12 +191,22 @@ async def test_same_origin_post_is_allowed():
 
 
 @pytest.mark.asyncio
-async def test_configured_origin_is_allowed():
+async def test_configured_origin_is_allowed_on_the_api():
+    app = _same_origin_app(["https://tools.example.com"])
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/api/v1/users", headers={"Origin": "https://tools.example.com"})
+
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_configured_origin_cannot_post_the_login_form():
+    """A CORS origin exists for the API; letting it post the login form would reopen login CSRF."""
     app = _same_origin_app(["https://tools.example.com"])
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/login", headers={"Origin": "https://tools.example.com"})
 
-    assert resp.status_code == 200
+    assert resp.status_code == 403
 
 
 @pytest.mark.asyncio

@@ -24,6 +24,7 @@ class KeyPermissionResource(StrEnum):
     ADMIN = "admin"
     BILLING = "billing"
     API_KEYS = "api_keys"
+    FEATURE_FLAGS = "feature_flags"
     WILDCARD = "*"
 
 

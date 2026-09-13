@@ -128,15 +128,23 @@ async def revoke_role(db: AsyncSession, actor: audit.Actor, user_id: int, role_n
     await db.commit()
 
 
-async def record_login(db: AsyncSession, actor: audit.Actor) -> None:
-    """Record that a browser session was started, so sign-ins sit in the same trail as decisions."""
-    await audit.record(db, actor, "platform.session.login", "user", audit.actor_id(actor))
+async def record_login(db: AsyncSession, actor: audit.Actor, method: str = "browser") -> None:
+    """Record that a session was started, so sign-ins sit in the same trail as decisions.
+
+    ``method`` names the entry point (browser form, JSON API, OAuth, /admin). The break-glass admin login has no
+    platform user behind it, so it lands with a null actor and is identified by its method.
+    """
+    await audit.record(
+        db, actor, "platform.session.login", "user", audit.actor_id(actor) or "unknown", after={"method": method}
+    )
     await db.commit()
 
 
-async def record_logout(db: AsyncSession, actor: audit.Actor) -> None:
-    """Record that a browser session was ended by the user."""
-    await audit.record(db, actor, "platform.session.logout", "user", audit.actor_id(actor))
+async def record_logout(db: AsyncSession, actor: audit.Actor, method: str = "browser") -> None:
+    """Record that a session was ended by the user."""
+    await audit.record(
+        db, actor, "platform.session.logout", "user", audit.actor_id(actor) or "unknown", after={"method": method}
+    )
     await db.commit()
 
 

@@ -7,6 +7,7 @@ service layer without widening every service signature.
 """
 
 import contextvars
+import ipaddress
 import re
 import uuid
 from dataclasses import dataclass
@@ -19,6 +20,9 @@ from .config.settings import get_settings
 REQUEST_ID_HEADER = "X-Request-ID"
 FORWARDED_FOR_HEADER = "X-Forwarded-For"
 REQUEST_ID_MAX_LENGTH = 64
+# The header is proxy-written but still attacker-influenced; the value goes in a varchar audit column, so it is both
+# truncated before parsing and required to be a real address.
+FORWARDED_FOR_MAX_LENGTH = 1024
 _SAFE_REQUEST_ID = re.compile(rf"^[A-Za-z0-9._-]{{1,{REQUEST_ID_MAX_LENGTH}}}$")
 
 
@@ -48,11 +52,16 @@ def _client_ip(request: Request, trusted_proxy_hops: int) -> str | None:
     if not forwarded:
         return peer
 
-    hops = [value.strip() for value in forwarded.split(",") if value.strip()]
+    hops = [value.strip() for value in forwarded[:FORWARDED_FOR_MAX_LENGTH].split(",") if value.strip()]
     if len(hops) < trusted_proxy_hops:
         return peer
 
-    return hops[-trusted_proxy_hops]
+    candidate = hops[-trusted_proxy_hops]
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        return peer
+    return candidate
 
 
 @dataclass(frozen=True)

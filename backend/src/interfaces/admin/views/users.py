@@ -8,6 +8,8 @@ from starlette.requests import Request
 from wtforms import SelectField
 
 from ....infrastructure.database.session import local_session
+from ....modules.platform import audit
+from ....modules.platform.admin import AuditedAdminView, snapshot
 from ....modules.user.enums import OAuthProvider
 from ....modules.user.models import User
 from ....modules.user.schemas import UserUpdate
@@ -17,7 +19,7 @@ from ..mixins import DataclassModelMixin
 OAUTH_PROVIDER_CHOICES = [("", "None")] + [(p.value, p.value.title()) for p in OAuthProvider]
 
 
-class UserAdmin(DataclassModelMixin, ModelView, model=User):
+class UserAdmin(AuditedAdminView, DataclassModelMixin, ModelView, model=User):
     """Admin view for User model with password hashing."""
 
     name = "User"
@@ -47,6 +49,7 @@ class UserAdmin(DataclassModelMixin, ModelView, model=User):
 
     async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
         """Hash the password before saving."""
+        await super().on_model_change(data, model, is_created, request)
         if is_created and "hashed_password" in data and data["hashed_password"]:
             data["hashed_password"] = get_password_hash(data["hashed_password"])
         if "oauth_provider" in data and data["oauth_provider"] == "":
@@ -66,5 +69,11 @@ class UserAdmin(DataclassModelMixin, ModelView, model=User):
             pk: Primary key (ID) of the user to anonymize.
         """
         async with local_session() as db:
+            existing = await db.get(User, int(pk))
+            before = snapshot(existing) if existing is not None else None
+
             user_service = UserService()
             await user_service.anonymize_user(user_id=int(pk), db=db)
+
+            await audit.record(db, request.session.get("user_id"), "admin.user.anonymized", "user", pk, before=before)
+            await db.commit()

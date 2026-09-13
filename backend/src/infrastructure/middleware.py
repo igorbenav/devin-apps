@@ -21,14 +21,20 @@ class SameOriginMiddleware(BaseHTTPMiddleware):
     ``SameSite`` alone does not stop. Browsers attach ``Origin`` to those posts, so comparing it to this deployment's own
     origin closes login CSRF without touching the session flow. Requests with no ``Origin`` (server-to-server callers,
     curl) are left to the route's own authentication.
+
+    ``CORS_ORIGINS`` is honoured for the JSON API only. Those origins exist so browser clients can call ``/api/v1``;
+    letting them post the login forms too would hand every configured origin the login CSRF this middleware exists to
+    stop, so the server-rendered pages and ``/admin`` require a strict same-origin post.
     """
+
+    CROSS_ORIGIN_PREFIXES = ("/api/",)
 
     def __init__(self, app: ASGIApp, allowed_origins: list[str] | None = None) -> None:
         super().__init__(app)
         self.allowed_origins = {origin.rstrip("/") for origin in (allowed_origins or []) if origin != "*"}
 
     def _is_allowed(self, request: Request, origin: str) -> bool:
-        if origin.rstrip("/") in self.allowed_origins:
+        if request.url.path.startswith(self.CROSS_ORIGIN_PREFIXES) and origin.rstrip("/") in self.allowed_origins:
             return True
 
         parts = urlsplit(origin)
@@ -84,6 +90,21 @@ ADMIN_CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY.replace(
     "script-src 'self'", "script-src 'self' 'unsafe-inline'"
 ).replace("style-src 'self'", "style-src 'self' 'unsafe-inline'")
 
+# Swagger UI and ReDoc load their bundles from a CDN and Swagger initialises itself from an inline script, so the
+# strict policy renders an empty page. Scoped to the docs paths, which are superuser-only outside development.
+DOCS_CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "img-src 'self' data: https://fastapi.tiangolo.com; "
+    "font-src 'self' https://cdn.jsdelivr.net; "
+    "connect-src 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'none'; "
+    "object-src 'none'"
+)
+
 ADMIN_PREFIX = "/admin"
 
 
@@ -94,18 +115,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     (production/staging only).
     """
 
-    def __init__(self, app: ASGIApp, environment: str = "development") -> None:
+    def __init__(self, app: ASGIApp, environment: str = "development", docs_paths: list[str] | None = None) -> None:
         super().__init__(app)
         self.environment = environment
+        self.docs_paths = frozenset(path for path in (docs_paths or []) if path)
+
+    def _policy_for(self, path: str) -> str:
+        if path == ADMIN_PREFIX or path.startswith(f"{ADMIN_PREFIX}/"):
+            return ADMIN_CONTENT_SECURITY_POLICY
+        if path in self.docs_paths:
+            return DOCS_CONTENT_SECURITY_POLICY
+        return CONTENT_SECURITY_POLICY
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response: Response = await call_next(request)
-        path = request.url.path
-        response.headers["Content-Security-Policy"] = (
-            ADMIN_CONTENT_SECURITY_POLICY
-            if path == ADMIN_PREFIX or path.startswith(f"{ADMIN_PREFIX}/")
-            else CONTENT_SECURITY_POLICY
-        )
+        response.headers["Content-Security-Policy"] = self._policy_for(request.url.path)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
