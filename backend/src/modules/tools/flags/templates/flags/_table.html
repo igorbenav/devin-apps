@@ -32,3 +32,6 @@
     {% endfor %}
   </tbody>
 </table>
+{% if total > flags | length %}
+<p class="small">Showing {{ flags | length }} of {{ total }} flags, by key. Use <a href="/admin">the admin</a> for the rest.</p>
+{% endif %}

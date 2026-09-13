@@ -5,13 +5,15 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 KEY_PATTERN = r"^[a-z0-9]+(?:[-_.][a-z0-9]+)*$"
+KEY_MAX_LENGTH = 100
+DESCRIPTION_MAX_LENGTH = 500
 
 
 class FlagCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    key: str = Field(min_length=1, max_length=100, pattern=KEY_PATTERN)
-    description: str = ""
+    key: str = Field(min_length=1, max_length=KEY_MAX_LENGTH, pattern=KEY_PATTERN)
+    description: str = Field(default="", max_length=DESCRIPTION_MAX_LENGTH)
     enabled: bool = False
     rollout_percent: int = Field(default=100, ge=0, le=100)
     updated_by: int | None = None
@@ -20,7 +22,7 @@ class FlagCreate(BaseModel):
 class FlagUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
     enabled: bool | None = None
     rollout_percent: int | None = Field(default=None, ge=0, le=100)
     updated_by: int | None = None

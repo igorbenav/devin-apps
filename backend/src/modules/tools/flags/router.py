@@ -25,9 +25,10 @@ router = APIRouter(include_in_schema=False)
 ViewerDep = Annotated[ViewerContext, Depends(require_page_permission(SPEC.required_permission))]
 
 
-def _list_context(flags: list[dict[str, Any]], viewer: ViewerContext, error: str | None = None) -> dict[str, Any]:
+def _list_context(flags: list[dict[str, Any]], total: int, viewer: ViewerContext, error: str | None = None) -> dict[str, Any]:
     return {
         "flags": flags,
+        "total": total,
         "can_write": viewer.can(PERM_FLAGS_WRITE),
         "error": error,
         "tool": SPEC,
@@ -50,14 +51,16 @@ async def _render_table(
         error = str(exc)
 
     flags = await service.list_flags(db)
-    return render(request, "flags/_table.html", viewer=viewer, context=_list_context(flags, viewer, error))
+    total = await service.count_flags(db)
+    return render(request, "flags/_table.html", viewer=viewer, context=_list_context(flags, total, viewer, error))
 
 
 @router.get("")
 async def list_page(request: Request, db: AsyncSessionDep, viewer: ViewerDep) -> Any:
     """Every flag, with a toggle per row for users who may write."""
     flags = await service.list_flags(db)
-    return render(request, "flags/list.html", viewer=viewer, context=_list_context(flags, viewer))
+    total = await service.count_flags(db)
+    return render(request, "flags/list.html", viewer=viewer, context=_list_context(flags, total, viewer))
 
 
 @router.post("")

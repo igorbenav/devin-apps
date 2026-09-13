@@ -11,7 +11,7 @@ from starlette.requests import Request
 from src.modules.api_keys.dependencies import require_api_key
 from src.modules.api_keys.enums import KeyPermissionAction, KeyPermissionResource
 from src.modules.api_keys.schemas import APIKeyValidationResponse
-from src.modules.common.exceptions import ResourceExistsError
+from src.modules.common.exceptions import ResourceExistsError, ValidationError
 from src.modules.platform.admin import PermissionGatedView
 from src.modules.platform.constants import (
     ADMIN_PERMISSIONS,
@@ -63,6 +63,15 @@ async def test_create_rejects_a_duplicate_key(db_session: AsyncSession, test_use
 
     with pytest.raises(ResourceExistsError, match="already exists"):
         await make_flag(db_session, test_user, "payouts.instant")
+
+
+async def test_create_rejects_malformed_input_as_a_domain_error(db_session: AsyncSession, test_user: dict) -> None:
+    """The HTMX form renders DomainError inline; a raw pydantic error would be a 500."""
+    with pytest.raises(ValidationError, match="key"):
+        await make_flag(db_session, test_user, "Bad Key")
+
+    with pytest.raises(ValidationError, match="rollout_percent"):
+        await make_flag(db_session, test_user, "good.key", rollout_percent=101)
 
 
 async def test_toggle_flips_the_flag_and_audits_before_and_after(db_session: AsyncSession, test_user: dict) -> None:

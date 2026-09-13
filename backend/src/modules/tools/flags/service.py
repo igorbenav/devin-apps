@@ -8,11 +8,12 @@ import hashlib
 from typing import Any
 
 from crudauth.exceptions import ForbiddenException
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...common.exceptions import ResourceExistsError, ResourceNotFoundError
+from ...common.exceptions import ResourceExistsError, ResourceNotFoundError, ValidationError
 from ...platform import audit
 from ...platform.constants import PERM_FLAGS_WRITE
 from .crud import crud_flags
@@ -20,6 +21,7 @@ from .models import Flag
 from .schemas import FlagCreate, FlagRead, FlagUpdate
 
 ENTITY_TYPE = "feature_flag"
+LIST_LIMIT = 200
 
 
 def _actor_id(actor: dict[str, Any]) -> int | None:
@@ -32,6 +34,13 @@ def _require_write(permissions: set[str]) -> None:
         raise ForbiddenException(f"This action requires the '{PERM_FLAGS_WRITE}' permission")
 
 
+def _readable(error: PydanticValidationError) -> str:
+    """The first field error, phrased for a user looking at the form."""
+    first = error.errors()[0]
+    field = str(first["loc"][0]) if first["loc"] else "input"
+    return f"{field}: {first['msg']}"
+
+
 def _snapshot(flag: dict[str, Any]) -> dict[str, Any]:
     return {
         "enabled": flag["enabled"],
@@ -40,8 +49,13 @@ def _snapshot(flag: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def list_flags(db: AsyncSession, limit: int = 200) -> list[dict[str, Any]]:
-    """Every flag, by key."""
+async def count_flags(db: AsyncSession) -> int:
+    """How many flags exist, so the page can say when it is not showing all of them."""
+    return int(await crud_flags.count(db=db))
+
+
+async def list_flags(db: AsyncSession, limit: int = LIST_LIMIT) -> list[dict[str, Any]]:
+    """Flags by key, up to ``limit``."""
     result = await crud_flags.get_multi(
         db=db,
         limit=limit,
@@ -97,15 +111,20 @@ async def create_flag(
         raise ResourceExistsError(f"A flag with key '{key}' already exists")
 
     try:
+        new_flag = FlagCreate(
+            key=key,
+            description=description,
+            enabled=enabled,
+            rollout_percent=rollout_percent,
+            updated_by=_actor_id(actor),
+        )
+    except PydanticValidationError as exc:
+        raise ValidationError(_readable(exc)) from exc
+
+    try:
         created = await crud_flags.create(
             db=db,
-            object=FlagCreate(
-                key=key,
-                description=description,
-                enabled=enabled,
-                rollout_percent=rollout_percent,
-                updated_by=_actor_id(actor),
-            ),
+            object=new_flag,
             commit=False,
             schema_to_select=FlagRead,
         )
@@ -130,12 +149,16 @@ async def update_flag(
     _require_write(permissions)
     flag = await _lock_flag(db, flag_id)
 
-    changes = FlagUpdate(
-        description=description,
-        enabled=enabled,
-        rollout_percent=rollout_percent,
-        updated_by=_actor_id(actor),
-    )
+    try:
+        changes = FlagUpdate(
+            description=description,
+            enabled=enabled,
+            rollout_percent=rollout_percent,
+            updated_by=_actor_id(actor),
+        )
+    except PydanticValidationError as exc:
+        raise ValidationError(_readable(exc)) from exc
+
     changed = changes.model_dump(exclude_none=True, exclude={"updated_by"})
     await crud_flags.update(
         db=db,
