@@ -1,0 +1,30 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Internal Tools{% endblock %}
+
+{% block content %}
+<h1>Your tools</h1>
+
+{% if nav_tools %}
+<div class="cards">
+  {% for tool in nav_tools %}
+  <a class="card tool-card" href="{{ tool.route_prefix }}">
+    <h2>{{ tool.name }}</h2>
+    <p>{{ tool.description }}</p>
+    <span class="chip chip-muted">{{ tool.required_permission }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty">
+  <p>No tools are available to you yet.</p>
+  <p class="muted small">
+    {% if all_tools %}
+    Tools exist on this platform, but none match your permissions. Ask an admin for a role that grants access.
+    {% else %}
+    No tools have been added to the platform yet. Run <code>bp new tool &lt;slug&gt;</code> to add the first one.
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+{% endblock %}

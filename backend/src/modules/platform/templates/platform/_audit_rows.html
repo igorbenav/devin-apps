@@ -1,0 +1,16 @@
+{% for event in events %}
+<tr>
+  <td class="nowrap">{{ event.occurred_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+  <td>{{ event.actor_user_id if event.actor_user_id is not none else "system" }}</td>
+  <td><code>{{ event.action }}</code></td>
+  <td><code>{{ event.entity_type }}:{{ event.entity_id }}</code></td>
+  <td class="json">{{ event.before if event.before else "" }}</td>
+  <td class="json">{{ event.after if event.after else "" }}</td>
+  <td class="nowrap small muted">{{ event.request_id or "" }}</td>
+  <td class="nowrap small muted">{{ event.ip or "" }}</td>
+</tr>
+{% else %}
+<tr>
+  <td colspan="8" class="muted">No audit events recorded yet.</td>
+</tr>
+{% endfor %}
