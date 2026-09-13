@@ -133,3 +133,58 @@ Append-only. Newest session at the bottom.
   transitions, audit writes and append-only enforcement, registry filtering, and the platform
   pages.
 - Entra/OIDC is a README paragraph only.
+
+## Session 2 — KYC review queue (`tool/kyc`)
+
+### Generator output: kept vs rewritten
+
+Kept, unchanged or nearly so: the module skeleton and file layout, `crud.py` (two `FastCRUD`
+objects instead of one), `tool.py`'s `ToolSpec` and its auto-registration, `admin.py`'s
+read-only SQLAdmin view (duplicated for the second model), the `templates/kyc/` directory
+convention and the `{% extends "platform/base.html" %}` header block, the router's
+`require_page_permission` dependency alias, and the test file's location and fixtures.
+
+Rewritten: everything with domain content. `models.py`, `schemas.py`, `service.py`, `router.py`
+and all three templates were replaced — the generated example is a single-model
+open/done toggle, and KYC is two models, five states, four actors' worth of rules and
+eight routes. Roughly 20% of the generated lines survived, but the 20% is the part that is
+tedious to get right (registration, loader paths, admin wiring, permission dependency), which
+is the point: the generator removes the boilerplate, not the thinking.
+
+### Decisions made without being told
+
+- `escalated → in_review` ("resume") requires `kyc.approve`, not `kyc.review`. The brief says
+  "by a reviewer"; an analyst who could pull a case back out of escalation would defeat the
+  escalation. Resuming also assigns the case to the actor.
+- Maker/checker is enforced against `assigned_to` at decision time, so the block is escapable by
+  releasing the case and having someone else claim it — that is intended (release is itself
+  audited), but it means the control is "two humans touched this", not "the maker can never
+  decide". Worth saying out loud to the VP.
+- Superusers bypass permission checks (platform behaviour) but **not** maker/checker: the
+  assignee rule is a domain rule in the service, not a permission. A superuser assigned to a case
+  still cannot decide it.
+- Decision reason minimum is 10 characters, per the brief; whitespace is stripped first so
+  `"          "` is rejected.
+- `/audit` gained an optional `entity_id` filter (`list_audit_events`) so the case detail page can
+  show only that case's chain without a second query path.
+- Seeded decided cases record `decided_by` as the seeded reviewer, so the detail page of an
+  already-approved case is not missing its decider.
+
+### For a security reviewer
+
+- Every transition writes the audit row in the same transaction as the state change
+  (`commit=False` on the CRUD write, then `audit.record`, then one `db.commit()`), so there is no
+  window where a case moves without an audit entry.
+- Action buttons are rendered from `service.allowed_actions()`, the same function the service
+  checks against — but the service re-validates on POST, so a hand-crafted POST cannot bypass
+  permission, state or maker/checker rules. The tests assert the service, not the template.
+- `assigned_to`/`decided_by` are `ON DELETE SET NULL`: deleting a user blanks the attribution on
+  their cases. The audit trail keeps `actor_user_id`, so history survives, but the case row alone
+  will no longer say who decided it.
+
+### Time / what took longer than expected
+
+- About 90 minutes end to end. The only real surprise: `KycCaseCreate.submitted_at` defaulted to
+  `None` and FastCRUD passes the whole dict through, so the model-level `default_factory` never
+  fired and every insert hit a NOT NULL violation. Defaulting in the schema, not the model, is the
+  rule here.

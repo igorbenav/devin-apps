@@ -1,0 +1,99 @@
+<div id="kyc-case-detail">
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <div class="card">
+    <h2>{{ case.customer_name }} <span class="chip">{{ case.state }}</span></h2>
+    <dl class="facts">
+      <dt>Customer ref</dt><dd><code>{{ case.customer_ref }}</code></dd>
+      <dt>Risk score</dt>
+      <dd><span class="risk risk-{{ "high" if case.risk_score >= 70 else ("medium" if case.risk_score >= 40 else "low") }}">{{ case.risk_score }}</span></dd>
+      <dt>Submitted</dt><dd>{{ case.submitted_at.strftime("%Y-%m-%d %H:%M") }}</dd>
+      <dt>Assignee</dt>
+      <dd>{% if case.assigned_to %}{{ usernames.get(case.assigned_to, case.assigned_to) }}{% else %}<span class="muted">unassigned</span>{% endif %}</dd>
+      {% if case.decided_by %}
+      <dt>Decided by</dt><dd>{{ usernames.get(case.decided_by, case.decided_by) }}</dd>
+      {% endif %}
+      {% if case.decision_reason %}
+      <dt>Reason</dt><dd>{{ case.decision_reason }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="card">
+    <h3>Documents</h3>
+    <table class="table">
+      <thead><tr><th>Kind</th><th>Filename</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for document in documents %}
+        <tr>
+          <td>{{ document.kind }}</td>
+          <td><code>{{ document.filename }}</code></td>
+          <td><span class="chip">{{ document.status }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="empty">No documents on this case.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Actions</h3>
+    {% if actions %}
+    <form class="actions" hx-target="#kyc-case-detail" hx-swap="outerHTML">
+      <input type="hidden" name="view" value="detail" />
+      {% if "approve" in actions or "reject" in actions or "escalate" in actions %}
+      <label for="reason">Reason <span class="muted small">(required, at least 10 characters)</span></label>
+      <textarea id="reason" name="reason" rows="3" placeholder="Why are you making this decision?"></textarea>
+      {% endif %}
+      <div class="action-buttons">
+        {% if "claim" in actions %}
+        <button class="button" hx-post="/tools/kyc/{{ case.id }}/claim">Claim</button>
+        {% endif %}
+        {% if "release" in actions %}
+        <button class="button button-quiet" hx-post="/tools/kyc/{{ case.id }}/release">Release</button>
+        {% endif %}
+        {% if "approve" in actions %}
+        <button class="button" hx-post="/tools/kyc/{{ case.id }}/approve">Approve</button>
+        {% endif %}
+        {% if "reject" in actions %}
+        <button class="button button-danger" hx-post="/tools/kyc/{{ case.id }}/reject">Reject</button>
+        {% endif %}
+        {% if "escalate" in actions %}
+        <button class="button button-quiet" hx-post="/tools/kyc/{{ case.id }}/escalate">Escalate</button>
+        {% endif %}
+        {% if "resume" in actions %}
+        <button class="button" hx-post="/tools/kyc/{{ case.id }}/resume">Take back into review</button>
+        {% endif %}
+      </div>
+    </form>
+    {% else %}
+    <p class="muted small">
+      Nothing for you to do on this case.
+      {% if case.state == "in_review" and case.assigned_to == viewer.user.id %}
+      You are the assigned reviewer, so maker/checker separation means someone else has to decide it.
+      {% endif %}
+    </p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Audit trail</h3>
+    <table class="table">
+      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        {% for event in events %}
+        <tr>
+          <td class="nowrap">{{ event.occurred_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+          <td class="nowrap">{{ event.actor_user_id if event.actor_user_id is not none else "system" }}</td>
+          <td class="nowrap">{{ event.action }}</td>
+          <td><code class="json">{{ event.before }}</code></td>
+          <td><code class="json">{{ event.after }}</code></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty">Nothing has happened to this case yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

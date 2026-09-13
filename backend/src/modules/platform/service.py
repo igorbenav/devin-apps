@@ -132,11 +132,17 @@ async def list_audit_events(
     db: AsyncSession,
     entity_type: str | None = None,
     limit: int = AUDIT_PAGE_SIZE,
+    entity_id: str | None = None,
 ) -> list[AuditEvent]:
-    """The most recent audit events, newest first, optionally filtered by entity type."""
+    """The most recent audit events, newest first, optionally filtered by entity.
+
+    Filtering by ``entity_id`` is how a tool shows the trail for one record.
+    """
     statement = select(AuditEvent).order_by(AuditEvent.occurred_at.desc(), AuditEvent.id.desc()).limit(limit)
     if entity_type:
         statement = statement.where(AuditEvent.entity_type == entity_type)
+    if entity_id is not None:
+        statement = statement.where(AuditEvent.entity_id == str(entity_id))
 
     result = await db.execute(statement)
     return list(result.scalars().all())
