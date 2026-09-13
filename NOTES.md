@@ -491,3 +491,24 @@ deciding the failure semantics above and confirming the API response shape.
   idempotency key on `POST /v1/sessions`, so the only honest recovery is a human looking for the `tool:<slug>` tag;
   the UI hides the retry button in that state rather than offering a second charge.
 - A 4xx (bad payload, bad key) is definitive, so it stays `failed` and retryable.
+
+### Deploy: one runbook, verified by running it
+
+- **`DEPLOY.md` is the single path**, and it was exercised end to end on this box against the generated `prod`
+  compose: build → `preflight --config-only` → `up -d` (migrate + role sync) → `create_first_superuser` → login as
+  that admin over Redis-backed sessions with all three tools on the launcher. Running it is what found the next
+  three items; none of them were visible by reading the templates.
+- **The inherited `migrations/env.py` required `DATABASE_URL` in production**, so `alembic upgrade head` failed for
+  any deployment using the `POSTGRES_*` values — which is what the compose stack does. The URL is built from either,
+  so only `SECRET_KEY` is required now.
+- **The generated compose set `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}` on the database service.** That
+  interpolates from the *compose project's* `.env`, not the app's env file, so Postgres initialised with the default
+  password while the app connected with the real one. The database service now reads the same env file as the app.
+- **Production needs roles without demo users.** `scripts.sync_roles` is the half of `create_platform_roles` that is
+  safe to run every deploy; the demo users stay behind the production refusal. The `migrate` service runs it right
+  after the schema, so a newly merged tool's permission strings exist before its pages are reachable.
+- **`preflight` splits config from connectivity.** `--config-only` reuses the production validator before anything
+  starts; the full run also checks the applied Alembic revision against the one the image ships and pings the session
+  Redis, because sessions, CSRF tokens and lockout all live there.
+- **`setup_initial_data` now respects `CREATE_TABLES_ON_STARTUP=false`** instead of creating tables from the models
+  behind Alembic's back.

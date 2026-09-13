@@ -15,7 +15,14 @@ services:
       - {{ env_file }}
     environment:
       POSTGRES_SERVER: postgres
+      CACHE_REDIS_HOST: redis
+      RATE_LIMITER_REDIS_HOST: redis
+      TASKIQ_REDIS_HOST: redis
       CONFIRM_PRODUCTION_MIGRATION: "yes"
+    working_dir: /app
+    # Roles carry the permission strings each installed tool declares, so they are synced on every deploy,
+    # right after the schema. Both steps are idempotent; neither creates users or demo data.
+    command: ["sh", "-c", "alembic upgrade head && python -m scripts.sync_roles"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,7 +42,14 @@ services:
       TASKIQ_REDIS_HOST: redis
       WORKERS: "{{ workers }}"
     ports:
-      - "{{ api_port }}:8000"
+      # Bound to loopback: put a TLS-terminating proxy in front (or use `bp deploy generate nginx`).
+      - "127.0.0.1:{{ api_port }}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -70,16 +84,15 @@ services:
 
   postgres:
     image: {{ postgres_image }}
+    # POSTGRES_USER/PASSWORD/DB come from the app's env file: an `environment:` block here would be
+    # interpolated from the compose project's own .env and could initialise the database with a
+    # different password than the app connects with.
     env_file:
       - {{ env_file }}
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -87,11 +100,16 @@ services:
 
   redis:
     image: {{ redis_image }}
-    command: ["redis-server", "--appendonly", "yes"]
+    env_file:
+      - {{ env_file }}
+    # Sessions, CSRF tokens and login lockout counters live here. Setting CACHE_REDIS_PASSWORD in the env file
+    # turns on AUTH for both the server and its healthcheck; leaving it empty keeps Redis open on the internal
+    # compose network only.
+    command: ["sh", "-c", "redis-server --appendonly yes $${CACHE_REDIS_PASSWORD:+--requirepass \"$$CACHE_REDIS_PASSWORD\"}"]
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli $${CACHE_REDIS_PASSWORD:+-a \"$$CACHE_REDIS_PASSWORD\"} ping"]
       interval: 10s
       timeout: 5s
       retries: 10

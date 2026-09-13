@@ -9,6 +9,7 @@ from scripts.create_first_superuser import create_first_superuser  # noqa: E402
 from scripts.create_first_tier import create_first_tier  # noqa: E402
 from scripts.create_platform_roles import create_platform_roles  # noqa: E402
 from scripts.seed_tools import seed_tools  # noqa: E402
+from src.infrastructure.config.settings import settings  # noqa: E402
 from src.infrastructure.database.initialize import close_database  # noqa: E402
 from src.infrastructure.database.session import create_tables  # noqa: E402
 from src.infrastructure.logging import get_logger  # noqa: E402
@@ -20,7 +21,7 @@ logger = get_logger()
 async def setup_initial_data() -> None:
     """Setup initial data for the application, including:
 
-    - Create database tables
+    - Create database tables, unless Alembic owns the schema (CREATE_TABLES_ON_STARTUP=false)
     - Create default tier
     - Create admin superuser
     - Create platform roles and demo users
@@ -30,13 +31,16 @@ async def setup_initial_data() -> None:
 
     discover_tools()  # tool models must be in Base.metadata before the tables are created
 
-    logger.info("Creating database tables...")
-    try:
-        await create_tables()
-        logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.error(f"Error creating database tables: {str(e)}", exc_info=True)
-        sys.exit(1)
+    if settings.CREATE_TABLES_ON_STARTUP:
+        logger.info("Creating database tables...")
+        try:
+            await create_tables()
+            logger.info("Database tables created successfully")
+        except Exception as e:
+            logger.error(f"Error creating database tables: {str(e)}", exc_info=True)
+            sys.exit(1)
+    else:
+        logger.info("CREATE_TABLES_ON_STARTUP=false: leaving the schema to Alembic, run `alembic upgrade head` first")
 
     logger.info("Creating first tier...")
     await create_first_tier()
