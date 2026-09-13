@@ -1,12 +1,13 @@
 """Production security validation.
 
-This module provides comprehensive security validation for production environments,
-checking for common misconfigurations that could lead to security vulnerabilities.
+This module provides comprehensive security validation for production environments, checking for common
+misconfigurations that could lead to security vulnerabilities.
 """
 
 import re
 from urllib.parse import unquote, urlsplit
 
+from ..config.enums import SessionBackend
 from ..config.settings import EnvironmentOption, Settings
 from ..logging import get_logger
 
@@ -207,6 +208,26 @@ class ProductionSecurityValidator:
                 "Admin interface is enabled (ADMIN_ENABLED=true) but ADMIN_USERNAME and/or "
                 "ADMIN_PASSWORD are not set. Set both to strong, unique values or set "
                 "ADMIN_ENABLED=false for production."
+            )
+
+        if not self.settings.CSRF_ENABLED:
+            errors.append(
+                "CSRF_ENABLED is false. Session cookies are sent by the browser on cross-site requests, so the "
+                "synchronizer token is the only thing standing between a third-party page and a state change made "
+                "as the logged-in user. Enable it in production."
+            )
+
+        if not self.settings.SESSION_SECURE_COOKIES:
+            errors.append(
+                "SESSION_SECURE_COOKIES is false. Session cookies would be sent over plain HTTP and can be "
+                "intercepted. Terminate TLS in front of the app and set it to true."
+            )
+
+        if self.settings.SESSION_BACKEND != SessionBackend.REDIS.value:
+            errors.append(
+                f"SESSION_BACKEND is '{self.settings.SESSION_BACKEND}'. In-memory sessions are per-process, so "
+                "sessions break across workers and — because login lockout shares that backend — password guessing "
+                "is unlimited. Use Redis in production."
             )
 
         if self._is_cors_too_permissive():
@@ -655,13 +676,6 @@ class ProductionSecurityValidator:
         """
         warnings: list[str] = []
 
-        if not self.settings.SESSION_SECURE_COOKIES:
-            warnings.append(
-                "SESSION_SECURE_COOKIES is disabled. This allows session cookies to be "
-                "transmitted over unencrypted HTTP connections, making them vulnerable "
-                "to interception. Enable secure cookies in production."
-            )
-
         if self.settings.SESSION_TIMEOUT_MINUTES > 120:
             warnings.append(
                 f"Session timeout is set to {self.settings.SESSION_TIMEOUT_MINUTES} minutes "
@@ -669,10 +683,10 @@ class ProductionSecurityValidator:
                 f"a session is compromised. Consider reducing the timeout for production."
             )
 
-        if not self.settings.CSRF_ENABLED:
+        if self.settings.CREATE_TABLES_ON_STARTUP:
             warnings.append(
-                "CSRF protection is disabled. This makes your application vulnerable to "
-                "Cross-Site Request Forgery attacks. Enable CSRF protection in production."
+                "CREATE_TABLES_ON_STARTUP is enabled in production. Schema changes should come from Alembic "
+                "migrations that are reviewed, not from model metadata at boot."
             )
 
         return warnings

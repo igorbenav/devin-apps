@@ -4,6 +4,8 @@ from sqladmin import ModelView
 from starlette.requests import Request
 
 from ....infrastructure.database.session import local_session
+from ....modules.platform import audit
+from ....modules.platform.admin import AuditedAdminView, jsonable
 from ....modules.tier.crud import crud_tiers
 from ....modules.tier.models import Tier
 from ....modules.tier.schemas import TierCreate, TierUpdate
@@ -11,7 +13,7 @@ from ....modules.tier.service import TierService
 from ..mixins import DataclassModelMixin
 
 
-class TierAdmin(DataclassModelMixin, ModelView, model=Tier):
+class TierAdmin(AuditedAdminView, DataclassModelMixin, ModelView, model=Tier):
     """Admin view for Tier model."""
 
     name = "Tier"
@@ -55,3 +57,13 @@ class TierAdmin(DataclassModelMixin, ModelView, model=Tier):
                 raise ValueError(f"Tier with ID {pk} not found")
 
             await tier_service.permanent_delete(tier["name"], db)
+
+            await audit.record(
+                db,
+                request.session.get("user_id"),
+                "admin.tier.deleted",
+                "tier",
+                pk,
+                before={key: jsonable(value) for key, value in tier.items()},
+            )
+            await db.commit()

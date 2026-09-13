@@ -5,15 +5,15 @@ from typing import Any
 from sqladmin import ModelView
 from starlette.requests import Request
 
-from ....modules.platform.admin import PermissionGatedView
+from ....modules.platform.admin import AuditedAdminView, PermissionGatedView
 from ....modules.platform.constants import PERM_AUDIT_READ, PERM_PLATFORM_ADMIN
 from ....modules.platform.models import AuditEvent, Role, UserRole
 from ..mixins import DataclassModelMixin
 
-__all__ = ["AuditEventAdmin", "PermissionGatedView", "RoleAdmin", "UserRoleAdmin"]
+__all__ = ["AuditEventAdmin", "AuditedAdminView", "PermissionGatedView", "RoleAdmin", "UserRoleAdmin"]
 
 
-class RoleAdmin(PermissionGatedView, DataclassModelMixin, ModelView, model=Role):
+class RoleAdmin(PermissionGatedView, AuditedAdminView, DataclassModelMixin, ModelView, model=Role):
     """Roles and the permission strings they grant."""
 
     required_permission = PERM_PLATFORM_ADMIN
@@ -29,7 +29,7 @@ class RoleAdmin(PermissionGatedView, DataclassModelMixin, ModelView, model=Role)
     form_columns = [Role.name, Role.description, Role.permissions]
 
 
-class UserRoleAdmin(PermissionGatedView, DataclassModelMixin, ModelView, model=UserRole):
+class UserRoleAdmin(PermissionGatedView, AuditedAdminView, DataclassModelMixin, ModelView, model=UserRole):
     """Role assignments."""
 
     required_permission = PERM_PLATFORM_ADMIN

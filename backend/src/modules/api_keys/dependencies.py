@@ -5,7 +5,10 @@ from crudauth.exceptions import UnauthorizedException
 from fastapi import Depends, Security
 from fastapi.security import APIKeyHeader
 
+from ...infrastructure.config import get_settings
 from ...infrastructure.dependencies import AsyncSessionDep
+from ...infrastructure.rate_limit.exceptions import RateLimitException
+from ...infrastructure.rate_limit.provider import increment_and_check
 from .enums import KeyPermissionAction, KeyPermissionResource
 from .schemas import APIKeyValidationResponse
 from .service import APIKeyService
@@ -44,3 +47,26 @@ def require_api_key(
         return validation
 
     return dependency
+
+
+async def enforce_api_key_rate_limit(caller: APIKeyValidationResponse, *, limit: int, period: int) -> None:
+    """Rate limit a route per API key.
+
+    The shipped ``check_rate_limit`` buckets by session user or client IP and reads tier limits, neither of which fits
+    a key-authenticated service route: every caller shares one IP behind a cluster egress. This buckets by key id.
+
+    Enforcement needs the rate limiter backend, which is only registered when ``RATE_LIMITER_ENABLED``; with it off the
+    route is unlimited, the same opt-in posture as the rest of the repo.
+    """
+    settings = get_settings()
+    if not settings.RATE_LIMITER_ENABLED:
+        return
+
+    _, is_limited = await increment_and_check(
+        key=f"ratelimit:apikey:{caller.api_key_id}",
+        limit=limit,
+        period=period,
+        fail_open=settings.RATE_LIMITER_FAIL_OPEN,
+    )
+    if is_limited:
+        raise RateLimitException(f"Rate limit exceeded for this API key. Try again in {period} seconds.")

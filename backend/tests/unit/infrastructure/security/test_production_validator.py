@@ -39,6 +39,7 @@ class TestProductionSecurityValidator:
             "ADMIN_PASSWORD": "very_secure_admin_password_123",
             "PRODUCTION_SECURITY_VALIDATION_ENABLED": True,
             "PRODUCTION_SECURITY_STRICT_MODE": False,
+            "CREATE_TABLES_ON_STARTUP": False,
             # Redis settings
             "CACHE_REDIS_HOST": "localhost",
             "CACHE_REDIS_PORT": 6379,
@@ -141,9 +142,8 @@ class TestProductionSecurityValidator:
     def test_database_url_password_overrides_postgres_password(self):
         """Test that credentials in DATABASE_URL are what gets validated.
 
-        A managed provider (Neon, RDS, Cloud SQL) carries its credentials in
-        DATABASE_URL while POSTGRES_PASSWORD keeps its default — that must not
-        be reported as insecure.
+        A managed provider (Neon, RDS, Cloud SQL) carries its credentials in DATABASE_URL while POSTGRES_PASSWORD keeps
+        its default — that must not be reported as insecure.
         """
         settings = self.create_mock_settings(
             POSTGRES_PASSWORD="postgres",
@@ -181,8 +181,8 @@ class TestProductionSecurityValidator:
     def test_database_url_without_password_warns_instead_of_failing(self, caplog):
         """Test that a passwordless DATABASE_URL warns but still starts.
 
-        Authentication may be handled outside the connection string (IAM,
-        client certificates, a trusted socket), which cannot be verified here.
+        Authentication may be handled outside the connection string (IAM, client certificates, a trusted socket), which
+        cannot be verified here.
         """
         settings = self.create_mock_settings(
             POSTGRES_PASSWORD="postgres",
@@ -340,27 +340,17 @@ class TestProductionSecurityValidator:
         docs_warnings = [log for log in warning_logs if "API documentation" in log.message]
         assert len(docs_warnings) > 0
 
-    def test_insecure_session_config_logs_warning(self, caplog):
-        """Test that insecure session configuration logs warnings."""
-        settings = self.create_mock_settings(
-            SESSION_SECURE_COOKIES=False,
-            SESSION_TIMEOUT_MINUTES=180,  # 3 hours
-            CSRF_ENABLED=False,
-        )
+    def test_long_session_timeout_logs_warning(self, caplog):
+        """Test that a long session timeout logs a warning."""
+        settings = self.create_mock_settings(SESSION_TIMEOUT_MINUTES=180)
         validator = ProductionSecurityValidator(settings)
 
         validator.validate_production_security()
 
-        # Check for session warnings
         warning_logs = [record for record in caplog.records if record.levelname == "WARNING"]
-
-        cookie_warnings = [log for log in warning_logs if "SESSION_SECURE_COOKIES" in log.message]
         timeout_warnings = [log for log in warning_logs if "Session timeout" in log.message]
-        csrf_warnings = [log for log in warning_logs if "CSRF protection" in log.message]
 
-        assert len(cookie_warnings) > 0
         assert len(timeout_warnings) > 0
-        assert len(csrf_warnings) > 0
 
     def test_weak_admin_credentials_logs_warning(self, caplog):
         """Test that weak admin credentials log warnings."""
@@ -422,3 +412,33 @@ class TestProductionSecurityValidator:
         warning_logs = [record for record in caplog.records if record.levelname == "WARNING"]
         ssl_warnings = [log for log in warning_logs if "not using SSL/TLS" in log.message]
         assert len(ssl_warnings) == 0
+
+
+class TestSessionCriticalChecks:
+    """Settings that silently disable an authentication control must stop production startup."""
+
+    def _settings(self, **overrides):
+        return TestProductionSecurityValidator().create_mock_settings(**overrides)
+
+    def test_csrf_disabled_is_critical(self):
+        with pytest.raises(ProductionSecurityError) as exc_info:
+            ProductionSecurityValidator(self._settings(CSRF_ENABLED=False)).validate_production_security()
+
+        assert "CSRF_ENABLED" in str(exc_info.value)
+
+    def test_insecure_session_cookies_are_critical(self):
+        with pytest.raises(ProductionSecurityError) as exc_info:
+            ProductionSecurityValidator(self._settings(SESSION_SECURE_COOKIES=False)).validate_production_security()
+
+        assert "SESSION_SECURE_COOKIES" in str(exc_info.value)
+
+    def test_memory_session_backend_is_critical(self):
+        with pytest.raises(ProductionSecurityError) as exc_info:
+            ProductionSecurityValidator(self._settings(SESSION_BACKEND="memory")).validate_production_security()
+
+        assert "SESSION_BACKEND" in str(exc_info.value)
+
+    def test_create_tables_on_startup_warns(self, caplog):
+        ProductionSecurityValidator(self._settings(CREATE_TABLES_ON_STARTUP=True)).validate_production_security()
+
+        assert any("CREATE_TABLES_ON_STARTUP" in record.message for record in caplog.records)

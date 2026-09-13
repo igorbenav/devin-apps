@@ -9,12 +9,13 @@ internal user has somewhere to log in.
 from typing import Annotated, Any
 
 from crudauth.exceptions import UnauthorizedException
-from fastapi import APIRouter, Depends, Form, Request, Response
+from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ...infrastructure.auth.setup import auth as crud_auth
 from ...infrastructure.dependencies import AsyncSessionDep, OptionalUserDep
 from ...infrastructure.logging import get_logger
+from ...infrastructure.security import redact_identifier
 from . import service
 from .constants import AUDIT_PAGE_SIZE, PERM_AUDIT_READ
 from .dependencies import ViewerContext, ViewerDep, require_page_permission
@@ -25,6 +26,7 @@ logger = get_logger()
 router = APIRouter(include_in_schema=False)
 
 AuditViewerDep = Annotated[ViewerContext, Depends(require_page_permission(PERM_AUDIT_READ))]
+EntityTypeFilter = Annotated[str | None, Query(max_length=100)]
 
 
 def safe_next_path(next_url: str | None) -> str:
@@ -64,7 +66,9 @@ async def login_submit(
     try:
         user = await crud_auth.authenticate_password(db, username, password, request=request)
     except Exception as exc:
-        logger.info(f"Failed browser login for '{username}': {type(exc).__name__}")
+        identifier = redact_identifier(username)
+        logger.info(f"Failed browser login for {identifier}: {type(exc).__name__}")
+        await service.record_failed_login(db, identifier)
         message = "Too many attempts. Try again later." if not isinstance(exc, UnauthorizedException) else None
         return render(
             request,
@@ -79,17 +83,21 @@ async def login_submit(
         metadata={"login_type": "password", "username": crud_auth.repo.get(user, "username")},
     )
 
+    await service.record_login(db, crud_auth.repo.user_id(user))
+
     response = RedirectResponse(url=safe_next_path(next), status_code=303)
     crud_auth.sessions.set_session_cookies(response, session_id, csrf_token)
     return response
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response, viewer: ViewerDep) -> Response:
+async def logout(request: Request, response: Response, db: AsyncSessionDep, viewer: ViewerDep) -> Response:
     """End the browser session (HTMX posts this, so CSRF rides in the header)."""
     session_id = request.cookies.get(crud_auth.sessions.session_cookie_name)
     if session_id:
         await crud_auth.sessions.revoke(session_id, owner_id=int(viewer.user["id"]))
+
+    await service.record_logout(db, viewer.user)
 
     result = Response(status_code=204, headers={"HX-Redirect": "/login"})
     crud_auth.sessions.clear_session_cookies(result)
@@ -103,7 +111,9 @@ async def launcher(request: Request, viewer: ViewerDep) -> Any:
 
 
 @router.get("/audit", response_class=HTMLResponse)
-async def audit_page(request: Request, db: AsyncSessionDep, viewer: AuditViewerDep, entity_type: str | None = None) -> Any:
+async def audit_page(
+    request: Request, db: AsyncSessionDep, viewer: AuditViewerDep, entity_type: EntityTypeFilter = None
+) -> Any:
     """The last 200 audit events, filterable by entity type."""
     events = await service.list_audit_events(db, entity_type=entity_type, limit=AUDIT_PAGE_SIZE)
     entity_types = await service.list_audit_entity_types(db)
@@ -117,7 +127,9 @@ async def audit_page(request: Request, db: AsyncSessionDep, viewer: AuditViewerD
 
 
 @router.get("/audit/rows", response_class=HTMLResponse)
-async def audit_rows(request: Request, db: AsyncSessionDep, viewer: AuditViewerDep, entity_type: str | None = None) -> Any:
+async def audit_rows(
+    request: Request, db: AsyncSessionDep, viewer: AuditViewerDep, entity_type: EntityTypeFilter = None
+) -> Any:
     """HTMX partial: just the table rows, for the entity-type filter."""
     events = await service.list_audit_events(db, entity_type=entity_type, limit=AUDIT_PAGE_SIZE)
     return render(request, "platform/_audit_rows.html", viewer=viewer, context={"events": events})

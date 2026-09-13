@@ -260,3 +260,61 @@ For a security reviewer:
   generator template had the same hole and now emits the mixin.
 - The seeded API key prints to stdout rather than through the logger, so a live credential does not
   end up in aggregated application logs.
+
+## Session 4 — security review and hardening
+
+Full write-up in `SECURITY-REVIEW.md`; this records the decisions I made without being told.
+
+- **Login CSRF.** crudauth's synchronizer token only covers requests that already have a session, so
+  the two login forms were unprotected. I added a small `SameOriginMiddleware` rather than adding a
+  pre-session token to both forms: it is ~20 lines, it covers the SQLAdmin login form (which I do not
+  own), and requests with no `Origin` (curl, service callers) are left to route authentication. If
+  you later front this with something that rewrites `Host`, that middleware's same-origin comparison
+  depends on `Host` being trustworthy.
+- **CSP and `/admin`.** SQLAdmin's own templates carry inline script and style, so a single strict
+  policy would break the admin UI. Rather than weaken the whole app I select a looser policy on the
+  `/admin` prefix only. If SQLAdmin ever moves behind a different prefix, that check moves with it.
+- **Production validator now blocks startup** for `CSRF_ENABLED=false`, `SESSION_SECURE_COOKIES=false`
+  and a non-Redis session backend. This is a behaviour change: a production deployment that was
+  running with those settings will now refuse to boot. That is the point, but it will be a surprise.
+  I rewrote the existing test that asserted these were warnings.
+- **Login/logout are now audited.** Not asked for, but a KYC trail that cannot answer "who was logged
+  in" is half a trail. Failed logins are recorded with a digest of the submitted identifier, never
+  the identifier itself — people type passwords into username fields.
+- **API keys die with their owner.** `validate_api_key` now rejects keys whose owner is soft-deleted.
+  Offboarding previously left the only non-session auth path alive.
+- **Not fixed, deliberately** (all in the report with reasoning): SQLAdmin's permission snapshot is
+  stale for up to the session timeout; SQLAdmin writes bypass the audit trail; the evaluate endpoint
+  has no rate limit; API key scope is wildcard/read rather than per-endpoint. Each is a design
+  boundary rather than a bug, and fixing them properly is bigger than this pass.
+- **Took longer than expected:** working out which CSRF defences crudauth already provides versus what
+  the browser-facing routes added in session 1 needed on top. Most of the review time went into
+  reading, not writing; the code changes are small on purpose.
+
+## Session 4b — closing the four deferred security items
+
+All four of the "not fixed, deliberately" items above are now closed; `SECURITY-REVIEW.md` §1 rows
+13–18 have the detail. Decisions I made without being told:
+
+- **Admin permission freshness** is re-resolved in `AdminAuth.authenticate`, which runs on every
+  admin request, rather than in `is_accessible` (sync, cannot query). That is one DB round trip per
+  admin page load, which is fine for an internal admin surface and is the only place SQLAdmin gives
+  an async hook. A session with no `user_id` is the break-glass admin and is left alone.
+- **Admin auditing is best-effort, not atomic.** SQLAdmin commits and then calls the `after_*` hooks,
+  so the audit row is a second transaction. I did not fight SQLAdmin's session handling for this;
+  the mixin's docstring and the report say so plainly rather than implying admin writes are as
+  trustworthy as service-layer writes.
+- **The rate limiter buckets by API key id**, not by the shipped `check_rate_limit` (session user or
+  client IP, plus tier lookup): every service caller behind a cluster egress shares one IP, so the
+  shipped limiter would throttle all of them together. 600/min is a guess sized for polling clients;
+  no requirement was given.
+- **Wildcard API keys still reach the evaluate route** because `validate_api_key` falls back to
+  `*:read`. I did not remove that fallback — it is repo behaviour that other (future) keys rely on —
+  but the seeded key is now `feature_flags:read` and the report says wildcard keys should be revoked.
+- **Adding the enum value needed a migration** (`c41ab0d7e5f2`); its downgrade is empty because
+  Postgres cannot drop an enum value safely.
+- **Devin Review findings from the first security PR are also fixed here**: the strict CSP blanked
+  `/docs` (own policy for the docs paths), configured CORS origins could post the login forms (now
+  `/api/` only), API/OAuth/admin sign-ins were unaudited (`record_login` takes a `method`), and an
+  oversized or malformed `X-Forwarded-For` hop went into the audit row (truncated and parsed as an
+  IP, else the socket address).

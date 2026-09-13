@@ -16,7 +16,7 @@ from .schemas import AuditEventCreate
 Actor = dict[str, Any] | int | None
 
 
-def _actor_id(actor: Actor) -> int | None:
+def actor_id(actor: Actor) -> int | None:
     """Accept a user dict (the shape route dependencies hand around) or a raw id."""
     if actor is None:
         return None
@@ -51,7 +51,7 @@ async def record(
     await crud_audit_events.create(
         db=session,
         object=AuditEventCreate(
-            actor_user_id=_actor_id(actor),
+            actor_user_id=actor_id(actor),
             action=action,
             entity_type=entity_type,
             entity_id=str(entity_id),

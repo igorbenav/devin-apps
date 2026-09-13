@@ -16,8 +16,10 @@ from ...infrastructure.auth.setup import auth as crud_auth
 from ...infrastructure.config.settings import get_settings
 from ...infrastructure.database.session import local_session
 from ...infrastructure.logging import get_logger
+from ...infrastructure.security import redact_identifier
 from ...modules.platform.constants import PERM_PLATFORM_ADMIN
-from ...modules.platform.service import get_permissions_for_user
+from ...modules.platform.service import get_permissions_for_user, record_login, record_logout
+from ...modules.user.models import User
 
 logger = get_logger()
 
@@ -44,6 +46,8 @@ class AdminAuth(AuthenticationBackend):
             password_matches = _credential_matches(password, settings.ADMIN_PASSWORD)
             if username_matches and password_matches:
                 request.session.update({"admin_authenticated": True})
+                async with local_session() as db:
+                    await record_login(db, None, method="admin_break_glass")
                 return True
 
         if not isinstance(username, str) or not isinstance(password, str):
@@ -57,7 +61,7 @@ class AdminAuth(AuthenticationBackend):
             try:
                 user = await crud_auth.authenticate_password(db, username, password, request=request)
             except Exception as exc:
-                logger.info(f"Failed admin login for '{username}': {type(exc).__name__}")
+                logger.info(f"Failed admin login for {redact_identifier(username)}: {type(exc).__name__}")
                 return False
 
             user_id = int(crud_auth.repo.user_id(user))
@@ -76,13 +80,49 @@ class AdminAuth(AuthenticationBackend):
                 "permissions": sorted(permissions),
             }
         )
+        async with local_session() as db:
+            await record_login(db, user_id, method="admin")
         return True
 
     async def logout(self, request: Request) -> bool:
         """Clear the admin session."""
+        user_id = request.session.get("user_id")
+        if request.session.get("admin_authenticated", False):
+            async with local_session() as db:
+                await record_logout(
+                    db,
+                    int(user_id) if user_id is not None else None,
+                    method="admin" if user_id is not None else "admin_break_glass",
+                )
         request.session.clear()
         return True
 
     async def authenticate(self, request: Request) -> bool:
-        """Check if the current request is authenticated."""
-        return bool(request.session.get("admin_authenticated", False))
+        """Check if the current request is authenticated, re-resolving permissions.
+
+        SQLAdmin's ``is_accessible`` is sync and cannot query, so the views read permissions off the session. Resolving
+        them here — on every admin request — keeps that snapshot one request old at most, so revoking a role or deleting
+        a user takes effect immediately instead of at the next login.
+        """
+        if not request.session.get("admin_authenticated", False):
+            return False
+
+        user_id = request.session.get("user_id")
+        if user_id is None:
+            return True
+
+        async with local_session() as db:
+            user = await db.get(User, int(user_id))
+            if user is None or user.is_deleted:
+                request.session.clear()
+                return False
+
+            permissions = await get_permissions_for_user(db, int(user_id), is_superuser=user.is_superuser)
+
+        if not user.is_superuser and PERM_PLATFORM_ADMIN not in permissions:
+            logger.info(f"Admin access revoked mid-session for user {user_id}: missing {PERM_PLATFORM_ADMIN}")
+            request.session.clear()
+            return False
+
+        request.session.update({"is_superuser": user.is_superuser, "permissions": sorted(permissions)})
+        return True

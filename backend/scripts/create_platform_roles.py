@@ -14,6 +14,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.append(str(backend_dir))
 
+from src.infrastructure.config.settings import EnvironmentOption, settings  # noqa: E402
 from src.infrastructure.database.initialize import close_database  # noqa: E402
 from src.infrastructure.database.session import local_session  # noqa: E402
 from src.infrastructure.logging import get_logger  # noqa: E402
@@ -26,6 +27,7 @@ from src.modules.user.service import UserService  # noqa: E402
 logger = get_logger()
 
 DEMO_PASSWORD = os.getenv("DEMO_USER_PASSWORD", "Demo1234!")
+ALLOW_IN_PRODUCTION = os.getenv("SEED_DEMO_USERS_IN_PRODUCTION", "").lower() in {"1", "true", "yes"}
 
 DEMO_USERS: list[tuple[str, str, str, str]] = [
     ("Ana Analyst", "analyst", "analyst@example.com", ROLE_ANALYST),
@@ -34,8 +36,24 @@ DEMO_USERS: list[tuple[str, str, str, str]] = [
 ]
 
 
+def _refuse_in_production() -> None:
+    """Stop before creating known-credential accounts on a production database.
+
+    The demo users exist for the walkthrough; seeded into production they are three logins with a published password,
+    one of which holds every permission.
+    """
+    if settings.ENVIRONMENT != EnvironmentOption.PRODUCTION or ALLOW_IN_PRODUCTION:
+        return
+
+    raise SystemExit(
+        "Refusing to seed demo users: ENVIRONMENT=production. Create real accounts instead, or set "
+        "SEED_DEMO_USERS_IN_PRODUCTION=true with a strong DEMO_USER_PASSWORD if this really is what you want."
+    )
+
+
 async def create_platform_roles() -> None:
     """Create/update the three roles and their demo users, then print credentials."""
+    _refuse_in_production()
     user_service = UserService()
 
     async with local_session() as db:

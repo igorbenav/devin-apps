@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .models import DOC_STATUS_RECEIVED, STATE_PENDING
 
 REASON_MIN_LENGTH = 10
+REASON_MAX_LENGTH = 2000
 
 
 class KycCaseCreate(BaseModel):

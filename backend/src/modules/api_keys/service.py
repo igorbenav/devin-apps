@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...infrastructure.logging import get_logger
 from ..common.exceptions import PermissionDeniedError, ResourceNotFoundError
+from ..user.models import User
 from .crud import crud_api_keys, crud_key_permissions, crud_key_usage
 from .enums import KeyPermissionAction, KeyPermissionResource
 from .models import APIKey
@@ -46,8 +47,8 @@ _SCRYPT_DKLEN = 32
 class APIKeyService:
     """Service for managing API keys, permissions, and usage tracking.
 
-    Provides high-level operations for API key lifecycle management,
-    permission validation, usage tracking, and analytics.
+    Provides high-level operations for API key lifecycle management, permission validation, usage tracking, and
+    analytics.
     """
 
     def __init__(self):
@@ -338,6 +339,13 @@ class APIKeyService:
             return APIKeyValidationResponse(
                 is_valid=False,
                 error_message="API key has expired",
+            )
+
+        owner = await db.get(User, key["user_id"])
+        if owner is None or owner.is_deleted:
+            return APIKeyValidationResponse(
+                is_valid=False,
+                error_message="Invalid API key",
             )
 
         has_permission = await self._check_permission(

@@ -7,11 +7,12 @@ both, so the back office can look but not touch.
 
 from sqladmin import ModelView
 
+from ...platform.admin import PermissionGatedView
 from ...platform.constants import PERM_PLATFORM_ADMIN
 from .models import KycCase, KycDocument
 
 
-class KycCaseAdmin(ModelView, model=KycCase):
+class KycCaseAdmin(PermissionGatedView, ModelView, model=KycCase):
     """Back-office view of KYC cases."""
 
     required_permission = PERM_PLATFORM_ADMIN
@@ -39,7 +40,7 @@ class KycCaseAdmin(ModelView, model=KycCase):
     can_view_details = True
 
 
-class KycDocumentAdmin(ModelView, model=KycDocument):
+class KycDocumentAdmin(PermissionGatedView, ModelView, model=KycDocument):
     """Back-office view of the documents attached to a case."""
 
     required_permission = PERM_PLATFORM_ADMIN

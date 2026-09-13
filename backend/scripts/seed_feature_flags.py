@@ -87,7 +87,7 @@ async def _seed_api_key(db: AsyncSession, admin: dict) -> str | None:
         db=db,
         object=KeyPermissionCreate(
             api_key_id=int(created["id"]),
-            resource=KeyPermissionResource.WILDCARD,
+            resource=KeyPermissionResource.FEATURE_FLAGS,
             action=KeyPermissionAction.READ,
         ),
     )

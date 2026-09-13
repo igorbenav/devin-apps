@@ -68,7 +68,16 @@ app = create_application(
     openapi_url="/openapi.json",
 )
 
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+# SQLAdmin's login state rides this signed cookie; Starlette's defaults are a 14-day lifetime over plain HTTP, so it
+# follows the same rules as the crudauth session cookie instead.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    session_cookie="admin_session",
+    https_only=settings.SESSION_SECURE_COOKIES,
+    same_site="lax",
+    max_age=settings.SESSION_TIMEOUT_MINUTES * 60,
+)
 setup_platform(app)
 create_admin_interface(app)
 
