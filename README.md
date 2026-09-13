@@ -1,80 +1,50 @@
-<h1 align="center">Fastro · The Benav Labs FastAPI Boilerplate</h1>
-<p align="center" markdown=1>
-  <i><b>Batteries-included FastAPI starter</b> - vertical-slice modules, swappable infrastructure, plugin-ready CLI.</i>
-</p>
+# Internal tools platform
 
-<p align="center">
-  <a href="https://benavlabs.github.io/FastAPI-boilerplate">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/fastro-cover-dark.png">
-      <img src="docs/assets/fastro-cover-light.png" alt="Fastro - open-source FastAPI boilerplate with auth, CRUD, jobs, caching and rate-limits" width="100%">
-    </picture>
-  </a>
-</p>
+An internal-tools platform you own: the things a low-code suite like Power Apps gives you once
+for every app — login, roles and permissions, an audit trail, an admin back office, an app
+launcher — live once here, and each tool is a small module that plugs into them.
 
-<p align="center">
-<a href="https://benavlabs.github.io/FastAPI-boilerplate/">Docs</a> · <a href="https://deepwiki.com/benavlabs/FastAPI-boilerplate">DeepWiki</a> · <a href="https://discord.com/invite/TEmPs22gqB">Discord</a>
-</p>
+**One repo, one deployable FastAPI app.** Tools are never separate repos or separate
+deployments, because the whole point is that the tenth tool costs a fraction of the first:
+shared auth, shared audit, one migration history, one compose file, one thing to operate.
+The UI is server-rendered Jinja2 + HTMX — vendored locally, no CDN, no build step, no frontend
+to deploy.
 
-<p align="center">
-  <a href="https://fastapi.tiangolo.com">
-      <img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI">
-  </a>
-  <a href="https://www.postgresql.org">
-      <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
-  </a>
-  <a href="https://redis.io">
-      <img src="https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=fff&style=for-the-badge" alt="Redis">
-  </a>
-  <a href="https://deepwiki.com/benavlabs/FastAPI-boilerplate">
-      <img src="https://img.shields.io/badge/DeepWiki-1F2937?style=for-the-badge&logoColor=white" alt="DeepWiki">
-  </a>
-</p>
+Three tools ship as worked examples:
 
-<p align="center" markdown=1>
-  <i>The free, open-source FastAPI foundation. Building a <b>SaaS</b> - AI or not? <a href="https://fastro.ai">FastroAI</a> adds payments, entitlements, email &amp; a frontend (plus AI) on top - <a href="#fastro-vs-fastroai">compare&nbsp;↓</a></i>
-</p>
+| Tool                             | Permission to open | What it demonstrates                                                                                                        |
+| -------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| KYC Review Queue (`/tools/kyc`)  | `kyc.review`       | A real workflow: claim → approve/reject/escalate with maker/checker separation, mandatory reasons, every transition audited |
+| Feature Flags (`/tools/flags`)   | `flags.read`       | The cheap CRUD tool, plus an API-key-authenticated `GET /api/v1/flags/evaluate` for services                                |
+| Request a tool (`/tools/intake`) | `tools.request`    | A requester describes a tool; the app starts a Devin session from the brief and a human merges the PR                       |
 
-## Internal tools platform
-
-This fork is an **internal tools platform**: the things a low-code suite like Power Apps gives
-you once for every app — login, roles and permissions, an audit trail, an admin surface, an app
-launcher — live once in `backend/src/modules/platform/`, and each internal tool is a
-vertical-slice module under `backend/src/modules/tools/<slug>/` that plugs into it. **One repo,
-one deployable app**: tools are never separate repos or separate deployments, because the whole
-value proposition is that the tenth tool costs a fraction of the first — shared auth, shared
-audit, one migration history, one compose file, one thing to operate. UI is server-rendered
-Jinja2 + HTMX (vendored locally, no CDN, no build step). To add a tool, run
-`uv run bp new tool <slug> --label "<Label>" --permission <perm>` and follow
-[PLAYBOOK.md](PLAYBOOK.md).
-
-### Run it
+## Run it locally
 
 ```bash
 uv sync --all-packages --all-extras
 uv run bp deploy generate local
 cp backend/.env.example backend/.env && uv run bp env gen-secret   # paste into SECRET_KEY
-echo 'CREATE_TABLES_ON_STARTUP=false' >> backend/.env                # Alembic owns the schema
+echo 'CREATE_TABLES_ON_STARTUP=false' >> backend/.env              # Alembic owns the schema
 docker compose up -d --build
 
-# migrate, then seed roles + demo users, from inside the running container
+# migrate, then seed roles, demo users and demo data, from inside the running container
 docker compose exec -w /app api sh -c "alembic upgrade head && python -m scripts.setup_initial_data"
 ```
 
-The single migration in `backend/migrations/versions/` is the baseline schema (the boilerplate
-ships none, creating tables from the models at startup instead), so it must run against an empty
-database with `CREATE_TABLES_ON_STARTUP=false`. For a real deployment (production env file, the
-same migrations run by a one-shot container, the preflight check, upgrades and rollback) follow
-[DEPLOY.md](DEPLOY.md).
+Open <http://127.0.0.1:8000/> — the launcher (login required) shows only the tools you hold the
+permission for. `/audit` is the audit log (`audit.read`), `/admin` is SQLAdmin
+(`platform.admin` or superuser).
 
-Then open <http://127.0.0.1:8000/> — the launcher (login required), `/audit` for the audit log
-(needs `audit.read`), `/admin` for SQLAdmin (needs `platform.admin` or superuser).
+For a real deployment — production env file, migrations as a one-shot container, the preflight
+check, upgrades and rollback — follow [DEPLOY.md](DEPLOY.md). It is written to be executable by
+a Devin session, and everything it cannot invent (host, DNS, TLS, secrets) is called out.
 
 ### Seeded demo users
 
-`scripts/setup_initial_data.py` creates the three roles and one obvious user per role, printing
-the credentials when it finishes. **Development demo credentials only — never seed these in a
-real environment.** Override the password with `DEMO_USER_PASSWORD`.
+`scripts/setup_initial_data.py` creates the roles and one obvious user per role, printing the
+credentials when it finishes. **Development demo credentials only — never seed these in a real
+environment**; production role sync runs without them (`python -m scripts.sync_roles`). Override
+the password with `DEMO_USER_PASSWORD`.
 
 | User         | Role     | Password    | Permissions                                              |
 | ------------ | -------- | ----------- | -------------------------------------------------------- |
@@ -82,23 +52,72 @@ real environment.** Override the password with `DEMO_USER_PASSWORD`.
 | `reviewer`   | reviewer | `Demo1234!` | analyst + `kyc.approve`, `kyc.escalate`, `tools.request` |
 | `toolsadmin` | admin    | `Demo1234!` | all, incl. `flags.write`, `audit.read`, `platform.admin` |
 
-Permissions are flat dotted strings on a role, with no hierarchy. Superusers pass every check.
+Permissions are flat dotted strings on a role, with no hierarchy and no implication: holding
+`kyc.approve` does not grant `kyc.review`. Superusers pass every check.
 
-### Requesting a tool from inside the app
+## Adding a tool
 
-`/tools/intake` (needs `tools.request`) is how someone who is not on the platform team asks for a
-tool: they answer the ten-question brief from [UX.md](UX.md), the answers are stored, and the app
-calls `POST /v1/sessions` to start a Devin session from them — tagged `tool:<slug>` so cost is
-attributable per tool, capped with `max_acu_limit`, and pointed at the add-a-tool playbook. A human
-still reviews and merges the PR; the tool then appears in the launcher for whoever holds its
-permission.
+```bash
+uv run bp new tool refunds --label "Refunds" --permission refunds.read
+```
 
-The API key lives in `DEVIN_API_KEY` on the server and is never rendered or logged. Without it the
-page still records briefs and shows the generated prompt to copy, so the demo works either way.
-Submissions are capped per requester (`MAX_REQUESTS_PER_DAY`) because each one spends money. Every
-page also carries a **Report an issue** link that opens a prefilled, `tool-bug`-labelled issue with
-the tool, page and reporter filled in — the trigger an automation turns into a fix session (see
-[DEVIN-OPERATING-MODEL.md](DEVIN-OPERATING-MODEL.md)).
+That generates the whole module; then you write the domain. Follow
+[PLAYBOOK.md](PLAYBOOK.md) — it is the step-by-step a Devin session (or a new engineer) works
+from, including the tests and the definition of done.
+
+A tool is one directory that owns everything it contributes:
+
+```text
+backend/src/modules/tools/<slug>/
+  models.py schemas.py crud.py service.py   domain
+  permissions.py                            the permission strings this tool owns
+  router.py  templates/<slug>/*.html        pages
+  api.py                                    optional JSON API under /api/v1
+  admin.py                                  optional SQLAdmin views
+  seed.py                                   optional demo data
+  tests/                                    unit tests, next to the code
+  tool.py                                   the manifest that registers all of the above
+```
+
+Registration is the manifest and nothing else: the platform collects pages, API routers, admin
+views, permissions and seeds from each `ToolSpec` at startup, so adding a tool edits no shared
+file except which seeded role gets the new permission. Tools reach the platform through one
+façade, `src.platform_sdk`, and `lint-imports` enforces that — no tool imports another tool, and
+the platform never imports a tool. The reasoning, and what this looks like at 50 tools, is in
+[MODULARITY.md](MODULARITY.md).
+
+## What the platform gives every tool
+
+- **Login and sessions** — server-side sessions, CSRF, login lockout; Google OAuth wired
+  (swapping in Entra ID/OIDC is a provider class plus config, see below)
+- **Roles and permissions** — `require_permission` for routes, `current_permissions` for
+  templates so a button is only rendered when the action is actually allowed
+- **Audit trail** — append-only `audit.record` with actor, entity, before/after and reason,
+  readable at `/audit`; admin writes are audited too
+- **Launcher** — the home page, listing the tools the current user may open
+- **Admin** — SQLAdmin, permission-gated, for the back-office cases a tool page shouldn't grow
+- **Shared shell** — base templates, CSS, HTMX conventions, inline HTML errors, a
+  "Report an issue" link on every page
+- **Infrastructure** — Postgres + SQLAlchemy 2.0 async, Alembic, Redis cache/sessions, Taskiq
+  workers, rate limiting, API keys, the `bp` CLI for compose/env/generators
+
+## Using Devin to run it
+
+The platform is designed to be operated by Devin sessions as much as by people:
+[DEVIN-OPERATING-MODEL.md](DEVIN-OPERATING-MODEL.md) covers the playbooks, repo knowledge,
+automations (issue-label intake, CI-failure fixes, dependency sweeps), Devin Review and code
+scans, plus per-tool session tags and ACU caps so cost is attributable per tool. `/tools/intake`
+is the in-app version of that: a ten-question brief becomes a `POST /v1/sessions` call against
+the add-a-tool playbook. With no `DEVIN_API_KEY` configured it stores the brief and shows the
+prompt to copy instead of pretending a session started. A human always reviews and merges.
+
+## Security
+
+[SECURITY-REVIEW.md](SECURITY-REVIEW.md) is the full review — findings, what was fixed, what was
+accepted and why. Production startup refuses to run on an unsafe configuration (weak
+`SECRET_KEY`, `CSRF_ENABLED=false`, insecure session cookies, a non-Redis session backend,
+wildcard CORS with credentials), and `python -m scripts.preflight` checks the same rules plus the
+database revision and Redis before you move traffic.
 
 ### Swapping Google OAuth for Entra ID / OIDC
 
@@ -113,194 +132,59 @@ point the provider at
 downstream (session creation, roles, audit) is provider-agnostic and needs no changes; group
 claims could later be mapped onto platform roles in the same callback. Not implemented here.
 
-## Features
+## Repo layout
 
-- Fully async FastAPI + SQLAlchemy 2.0
-- Pydantic v2 models & validation
-- Server-side sessions + CSRF via [crudauth](https://pypi.org/project/crudauth/); OAuth (Google wired); API keys
-- Annotated type aliases for all FastAPI dependencies
-- Rate limiter with per-tier, per-path rules
-- FastCRUD for efficient CRUD & pagination
-- **SQLAdmin**-based admin panel (optional, env-toggled)
-- [Taskiq](https://taskiq-python.github.io/) workers (Redis or RabbitMQ broker)
-- Redis or Memcached caching (`@cache` decorator + provider API)
-- **Plugin-ready `bp` CLI** - generate compose files, audit env, mount third-party command/feature plugins
-- Docker Compose for local / prod / nginx-fronted (generated by the CLI)
-- Runs on any Postgres - the bundled container, or serverless via [Neon](https://neon.com) ([guide](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/database/neon/))
-
-## Why and When to use it
-
-**Perfect if you want:**
-
-- A pragmatic starter with auth, CRUD, jobs, caching and rate-limits
-- **Sensible defaults** with the freedom to opt-out of modules
-- **A foundation that grows** - vertical-slice modules + a plugin-aware CLI for code generators
-- **Docs over boilerplate** in this README - depth lives on the [docs site](https://benavlabs.github.io/FastAPI-boilerplate/)
-
-> **Not a fit** if you need a monorepo microservices scaffold - [see the docs](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/project-structure/) for pointers.
-
-**What you get:**
-
-- **App**: FastAPI [app factory](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/project-structure/), env-aware docs exposure
-- **Auth**: [server-side sessions](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/authentication/sessions/), CSRF, [OAuth](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/authentication/), [API keys](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/authentication/permissions/)
-- **DB**: Postgres + SQLAlchemy 2.0, [Alembic migrations](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/database/migrations/) with prod-confirm gate - local container or serverless ([Neon](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/database/neon/))
-- **CRUD**: [FastCRUD generics](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/database/crud/)
-- **Caching**: [decorator + provider API](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/caching/) (Redis or Memcached)
-- **Queues**: [Taskiq workers](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/background-tasks/) (Redis or RabbitMQ)
-- **Rate limits**: [per-tier + per-path rules](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/rate-limiting/)
-- **Admin**: [SQLAdmin views](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/admin-panel/) (optional, env-toggled)
-- **CLI**: [`bp` tool](https://benavlabs.github.io/FastAPI-boilerplate/cli/) for compose scaffolding, env audits, and plugin extensions
-
-## Fastro vs FastroAI
-
-This boilerplate - **Fastro** - is the free, open-source **foundation**: everything you need for a production FastAPI backend. **[FastroAI](https://fastro.ai)** is the paid template built on the same foundation for shipping a **complete SaaS** - Stripe billing (subscriptions, credits, discounts), entitlements, transactional email, and a frontend, all wired together. Building an **AI** product? The PydanticAI agent layer is included too - but every paid feature fits a regular SaaS just as well.
-
-|                                                                    | **Fastro** (this repo · free) |     **FastroAI** (paid)     |
-| ------------------------------------------------------------------ | :---------------------------: | :-------------------------: |
-| FastAPI + SQLAlchemy 2.0, Pydantic v2                              |               ✓               |              ✓              |
-| Auth - sessions, OAuth, API keys                                   |               ✓               |         ✓ **+ JWT**         |
-| FastCRUD · SQLAdmin · Alembic                                      |               ✓               |              ✓              |
-| Caching · rate limiting · Taskiq jobs                              |               ✓               |              ✓              |
-| Docker (local / prod / nginx)                                      |               ✓               |              ✓              |
-| `bp` CLI - scaffolding, env audit, plugins                         |               ✓               |                             |
-| **Payments** - Stripe: subscriptions, credits, discounts, webhooks |                               |              ✓              |
-| **Entitlements** - feature gating by plan/tier                     |                               |              ✓              |
-| **Transactional email** & notifications                            |                               |              ✓              |
-| **Frontend** - Astro landing / marketing site                      |                               |              ✓              |
-| **Observability** - Logfire tracing & metrics                      |                               |              ✓              |
-| **AI agents** - PydanticAI: memory, tools, usage tracking          |                               |              ✓              |
-| Support                                                            |      Community · Discord      | Priority · lifetime updates |
-
-<p align="center">
-  <a href="https://fastro.ai">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/fastroai-card-dark.png">
-      <img src="docs/assets/fastroai-card-light.png" alt="FastroAI - the complete SaaS template: payments, entitlements, email, frontend and AI on top of Fastro" width="100%">
-    </picture>
-  </a>
-</p>
-
-**Stick with Fastro** if you want a clean, hackable FastAPI backend to build on.
-**[Get FastroAI →](https://fastro.ai)** if you're shipping a SaaS - AI or not - and want billing, entitlements, email, auth, and a frontend ready out of the box.
-
-## Repo Layout
-
-This is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) with two members. One venv at the root covers both.
+A [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) with two members; one
+venv at the root covers both.
 
 ```text
-fastapi-boilerplate/
-├── pyproject.toml          # workspace root (uv workspace metadata)
-├── backend/                # the deployable application
-│   ├── src/                # interfaces/, infrastructure/, modules/
-│   ├── pyproject.toml
-│   └── Dockerfile          # multi-stage: dev / migrate / prod
-└── cli/                    # `bp` - developer/operator tool (never ships in prod)
-    └── src/cli/
+├── backend/                      # the deployable application
+│   ├── src/
+│   │   ├── interfaces/           # FastAPI app, HTTP routes, SQLAdmin wiring
+│   │   ├── infrastructure/       # config, auth, db, cache, taskiq, deploy preflight
+│   │   ├── modules/platform/     # roles, permissions, audit, registry, launcher
+│   │   ├── modules/tools/<slug>/ # one directory per internal tool
+│   │   └── platform_sdk/         # the only surface tools may import
+│   ├── migrations/               # Alembic, one linear history for the whole app
+│   ├── scripts/                  # setup_initial_data, sync_roles, preflight, superuser
+│   └── Dockerfile                # multi-stage: dev / migrate / prod
+└── cli/                          # `bp` - developer/operator tool, never ships in prod
 ```
-
-## Quickstart
-
-```bash
-git clone https://github.com/<you>/FastAPI-boilerplate
-cd FastAPI-boilerplate
-uv sync --all-packages --all-extras           # one venv at the root, both members installed
-```
-
-Generate a compose file for the deployment shape you want:
-
-```bash
-uv run bp deploy generate local               # hot-reload dev stack
-# or: uv run bp deploy generate prod          # production single-host
-# or: uv run bp deploy generate nginx         # production behind nginx
-```
-
-Configure your env (the CLI helps with secrets and validation):
-
-```bash
-cp backend/.env.example backend/.env
-uv run bp env gen-secret                      # print a fresh SECRET_KEY
-uv run bp env validate                        # audit .env against the production validator
-```
-
-Bring it up:
-
-```bash
-docker compose up --build
-# → http://127.0.0.1:8000  (Swagger at /docs)
-```
-
-**Without Docker** (Postgres + Redis required locally - or skip local Postgres with [Neon](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/database/neon/)):
-
-```bash
-cd backend
-uv run alembic upgrade head
-uv run python -m scripts.setup_initial_data   # creates the first admin user + default tier
-uv run fastapi dev src/interfaces/main.py     # API
-uv run taskiq worker infrastructure.taskiq.worker:default_broker  # in a second terminal
-```
-
-> Full setup, env-var reference, and per-environment deployment guides live in the [docs](https://benavlabs.github.io/FastAPI-boilerplate/getting-started/installation/).
 
 ## Common tasks
 
 ```bash
-# generate a fresh production-ready compose file
+cd backend
+uv run --no-sync pytest tests/unit src/modules -q   # unit tests, including the per-tool ones
+uv run --no-sync mypy src
+uv run --no-sync lint-imports                       # layering + tool independence contracts
+uv run alembic revision --autogenerate -m "<msg>"
+
+cd ..
+uv run --no-sync ruff check backend cli
+uv run bp env validate                              # audit .env against the production validator
 uv run bp deploy generate prod --workers 8
-
-# audit your .env against the production security validator
-uv run bp env validate
-
-# run Alembic migrations
-cd backend && uv run alembic revision --autogenerate -m "<msg>" && uv run alembic upgrade head
-
-# run tests
-cd backend && uv run pytest
-
-# install bp as a global tool (optional)
-uv tool install --editable ./cli
 ```
 
-More examples (superuser creation, tiers, rate limits, admin usage, plugin authoring) in the [docs](https://benavlabs.github.io/FastAPI-boilerplate/).
+## Documentation
 
-## Sponsors
+| Document                                             | What it is for                                                            |
+| ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| [PLAYBOOK.md](PLAYBOOK.md)                           | How to add a tool, step by step — the file a Devin session is pointed at  |
+| [DEPLOY.md](DEPLOY.md)                               | The deployment runbook: env, migrations, preflight, upgrades, rollback    |
+| [MODULARITY.md](MODULARITY.md)                       | Why a tool is one directory, and what the repo looks like at 50 tools     |
+| [UX.md](UX.md)                                       | Personas, jobs to be done, and the shared UX contract tools must follow   |
+| [SECURITY-REVIEW.md](SECURITY-REVIEW.md)             | The security review: findings, fixes, accepted risks                      |
+| [DEVIN-OPERATING-MODEL.md](DEVIN-OPERATING-MODEL.md) | Playbooks, knowledge, automations and reviews for running this with Devin |
+| [NOTES.md](NOTES.md)                                 | Build log: decisions, tradeoffs, what was kept from generated code        |
 
-<a href="https://neon.com"><img src="https://img.shields.io/badge/Neon-00E599?style=for-the-badge&logo=postgresql&logoColor=black" alt="Neon"></a>
+## Upstream
 
-**[Neon](https://neon.com)** supports this project with database credits for our open-source infrastructure - thank you. Neon is serverless Postgres: compute scales to zero when idle, and you can branch a database like you branch code (handy for per-PR preview environments).
-
-It's also a drop-in option for your own build, and **free to start** - the free plan is permanent rather than a trial (no credit card), with enough storage and compute for dev, staging, and small production workloads. Point `DATABASE_URL` at a Neon project and the local Postgres container becomes optional - no code changes:
-
-```env
-DATABASE_URL=postgresql+asyncpg://user:password@ep-xxx-pooler.region.aws.neon.tech/neondb?ssl=require
-```
-
-→ [Full Neon guide](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/database/neon/) (connection-string conversion, pooled vs. direct endpoints, scale-to-zero pool settings). Any other managed Postgres works the same way.
-
-## Contributing
-
-Read [contributing](CONTRIBUTING.md).
-
-## References
-
-This project was inspired by a few projects, it's based on them with things changed to the way I like (and pydantic, sqlalchemy updated)
-
-- [`Full Stack FastAPI and PostgreSQL`](https://github.com/tiangolo/full-stack-fastapi-postgresql) by @tiangolo himself
-- [`FastAPI Microservices`](https://github.com/Kludex/fastapi-microservices) by @kludex which heavily inspired this boilerplate
-- [`Async Web API with FastAPI + SQLAlchemy 2.0`](https://github.com/rhoboro/async-fastapi-sqlalchemy) for sqlalchemy 2.0 ORM examples
-- [`FastaAPI Rocket Boilerplate`](https://github.com/asacristani/fastapi-rocket-boilerplate/tree/main) for docker compose
+This is a fork of [Fastro](https://github.com/benavlabs/FastAPI-boilerplate), the Benav Labs
+FastAPI boilerplate, which supplies the FastAPI/SQLAlchemy/Alembic foundation, the auth and
+caching infrastructure and the `bp` CLI. Everything under `modules/platform/`, `modules/tools/`
+and `platform_sdk/`, and the documents listed above, are this fork.
 
 ## License
 
 [`MIT`](LICENSE.md)
-
-## Contact
-
-Benav Labs – [benav.io](https://benav.io), [discord server](https://discord.com/invite/TEmPs22gqB)
-
-<hr>
-<a href="https://benav.io">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benav-labs-banner-dark.png">
-    <img src="docs/assets/benav-labs-banner-light.png" alt="Benav Labs - benav.io" width="100%"/>
-  </picture>
-</a>
