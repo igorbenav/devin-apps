@@ -56,9 +56,15 @@ if config.config_file_name is not None:
 
 
 def import_models(package_name):
-    """Automatically import all models from a package and its subpackages."""
+    """Automatically import all models from a package and its subpackages.
+
+    Test packages are skipped: tools keep their tests next to the code, and
+    importing them here would need the dev dependencies in production.
+    """
     package = importlib.import_module(package_name)
     for _, module_name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
+        if ".tests" in module_name:
+            continue
         importlib.import_module(module_name)
 
 

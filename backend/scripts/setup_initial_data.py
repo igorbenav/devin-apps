@@ -12,6 +12,7 @@ from scripts.seed_tools import seed_tools  # noqa: E402
 from src.infrastructure.database.initialize import close_database  # noqa: E402
 from src.infrastructure.database.session import create_tables  # noqa: E402
 from src.infrastructure.logging import get_logger  # noqa: E402
+from src.modules.platform.registry import discover_tools  # noqa: E402
 
 logger = get_logger()
 
@@ -26,6 +27,8 @@ async def setup_initial_data() -> None:
     - Seed demo data for every registered tool
     """
     logger.info("Setting up initial data...")
+
+    discover_tools()  # tool models must be in Base.metadata before the tables are created
 
     logger.info("Creating database tables...")
     try:
