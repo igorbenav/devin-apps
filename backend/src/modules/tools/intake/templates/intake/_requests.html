@@ -1,0 +1,58 @@
+{% if flash %}<p class="flash small">{{ flash }}</p>{% endif %}
+{% if error %}<p class="error small">{{ error }}</p>{% endif %}
+
+{% if not devin_configured %}
+<p class="muted small">
+  No Devin API key is configured on this deployment, so requests are recorded but no session is started. Open a
+  request to copy its prompt.
+</p>
+{% endif %}
+
+<form class="card brief-form" hx-post="/tools/intake" hx-target="#intake-requests" hx-swap="innerHTML">
+  <label for="title">What should this tool be called?</label>
+  <input id="title" name="title" maxlength="200" value="{{ answers.get('title', '') }}"
+         placeholder="Chargeback review queue" required>
+
+  <label for="slug_hint">Short name for its URL and module</label>
+  <input id="slug_hint" name="slug_hint" maxlength="50" value="{{ answers.get('slug_hint', '') }}"
+         placeholder="chargebacks" pattern="[a-z][a-z0-9_]*[a-z0-9]"
+         title="Lowercase letters, digits and underscores, e.g. chargeback_review" required>
+
+  {% for field, question in questions %}
+  <label for="{{ field }}">{{ loop.index }}. {{ question }}</label>
+  <textarea id="{{ field }}" name="{{ field }}" rows="2" maxlength="2000" required>{{ answers.get(field, '') }}</textarea>
+  {% endfor %}
+
+  <button type="submit">Submit request</button>
+</form>
+
+<h2 class="small">{{ "All requests" if sees_all else "Your requests" }}</h2>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Tool</th>
+      {% if sees_all %}<th>Requester</th>{% endif %}
+      <th>Submitted</th>
+      <th>Status</th>
+      <th>Session</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in requests %}
+    <tr>
+      <td><a href="/tools/intake/{{ item.id }}">{{ item.title }}</a></td>
+      {% if sees_all %}<td class="nowrap">{{ usernames.get(item.requester_user_id, item.requester_user_id) }}</td>{% endif %}
+      <td class="nowrap">{{ item.created_at.strftime("%Y-%m-%d") }}</td>
+      <td class="nowrap">
+        <span class="chip {% if item.status != 'dispatched' %}chip-muted{% endif %}">{{ status_labels[item.status] }}</span>
+      </td>
+      <td class="nowrap">
+        {% if item.session_url %}<a href="{{ item.session_url }}" rel="noopener noreferrer" target="_blank">Open session</a>
+        {% else %}<span class="muted">—</span>{% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="{{ 5 if sees_all else 4 }}" class="empty">No requests yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

@@ -1,0 +1,19 @@
+<div class="card">
+  {% if error %}<p class="error small">{{ error }}</p>{% endif %}
+  <p>
+    <span class="chip {% if item.status != 'dispatched' %}chip-muted{% endif %}">{{ status_labels[item.status] }}</span>
+    {% if item.session_url %}
+    <a href="{{ item.session_url }}" rel="noopener noreferrer" target="_blank">Open the Devin session</a>
+    {% elif item.session_id %}
+    <code>{{ item.session_id }}</code>
+    {% endif %}
+  </p>
+  {% if item.dispatch_error %}<p class="error small">{{ item.dispatch_error }}</p>{% endif %}
+  {% if item.status in retryable_statuses and can_retry %}
+  <button class="button" hx-post="/tools/intake/{{ item.id }}/dispatch"
+          hx-target="#intake-status" hx-swap="innerHTML"
+          {% if not devin_configured %}disabled title="No Devin API key is configured on this deployment"{% endif %}>
+    Start the session
+  </button>
+  {% endif %}
+</div>

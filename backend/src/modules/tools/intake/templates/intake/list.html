@@ -1,0 +1,16 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Tool Requests — Internal Tools{% endblock %}
+
+{% block content %}
+<h1>Request a tool</h1>
+<p class="muted small">
+  Answer the brief and a Devin session starts from it. A human reviews and merges the PR; the tool then shows up on
+  your home page. Questions 4–6 are the ones that decide whether you get a workflow tool or a spreadsheet with a
+  login.
+</p>
+
+<div id="intake-requests">
+  {% include "intake/_requests.html" %}
+</div>
+{% endblock %}

@@ -73,8 +73,8 @@ class DatabaseSettings(BaseSettings):
     def DATABASE_URL(self) -> str:
         """Get the full database URL.
 
-        Checks for DATABASE_URL environment variable first (production pattern),
-        then falls back to constructing from individual components (development pattern).
+        Checks for DATABASE_URL environment variable first (production pattern), then falls back to constructing from
+        individual components (development pattern).
         """
         if self.DATABASE_URL_OVERRIDE:
             return self.DATABASE_URL_OVERRIDE
@@ -380,6 +380,23 @@ class TaskiqSettings(BaseSettings):
             raise ValueError(f"Unsupported broker type: {self.TASKIQ_BROKER_TYPE}")
 
 
+class DevinSettings(BaseSettings):
+    """Devin API settings used by the tool-request intake.
+
+    Without ``DEVIN_API_KEY`` the intake still records briefs and renders the prompt; it just cannot start the session
+    itself.
+    """
+
+    DEVIN_API_KEY: str = config("DEVIN_API_KEY", default="")
+    DEVIN_API_BASE_URL: str = config("DEVIN_API_BASE_URL", default="https://api.devin.ai")
+    DEVIN_TOOL_PLAYBOOK_ID: str = config("DEVIN_TOOL_PLAYBOOK_ID", default="")
+    DEVIN_MAX_ACU_LIMIT: int = config("DEVIN_MAX_ACU_LIMIT", default=20, cast=int)
+    DEVIN_REQUEST_TIMEOUT_SECONDS: float = config("DEVIN_REQUEST_TIMEOUT_SECONDS", default=20.0, cast=float)
+    ISSUE_TRACKER_NEW_ISSUE_URL: str = config(
+        "ISSUE_TRACKER_NEW_ISSUE_URL", default="https://github.com/igorbenav/devin-apps/issues/new"
+    )
+
+
 class Settings(
     EnvironmentSettings,
     DatabaseSettings,
@@ -396,6 +413,7 @@ class Settings(
     SecuritySettings,
     LoggingSettings,
     TaskiqSettings,
+    DevinSettings,
 ):
     """Main settings class that combines all setting categories."""
 

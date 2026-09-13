@@ -1,0 +1,13 @@
+<tr id="intake-item-{{ item.id }}">
+  <td><a href="/tools/intake/{{ item.id }}">{{ item.id }}</a></td>
+  <td>{{ item.title }}</td>
+  <td><span class="chip">{{ item.status }}</span></td>
+  <td>
+    {% if item.status == "open" %}
+    <button class="button"
+            hx-post="/tools/intake/{{ item.id }}/complete"
+            hx-target="#intake-item-{{ item.id }}"
+            hx-swap="outerHTML">Complete</button>
+    {% endif %}
+  </td>
+</tr>

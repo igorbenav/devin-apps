@@ -418,3 +418,76 @@ feature, not screens. Notes on it:
 - **The honest-limits section is deliberately blunt**: latency versus a WYSIWYG editor, no end-user
   editing, no connector ecosystem, a human still merges, variable cost instead of a licence, and
   the fact that maintenance of the shared layer becomes the customer's liability.
+
+## In-app tool intake and report-an-issue
+
+The one buildable piece from `DEVIN-OPERATING-MODEL.md`, now implemented as the `intake` tool
+(`backend/src/modules/tools/intake/`, permission `tools.request`) plus a shared header link.
+Decisions I made without being told:
+
+- **The slug is `intake`, not `requests`.** `requests` as a module name next to the library of the
+  same name is a trap for a future session reading an import out of context.
+- **The brief is persisted before the API call, always.** A failed dispatch leaves a `failed`
+  request with a retry button and the answers intact; nobody retypes ten questions because the API
+  was down. A deployment with no `DEVIN_API_KEY` leaves the request `queued` and shows the prompt
+  to copy rather than claiming a session started — the demo should not lie about what happened.
+- **Five submissions per requester per rolling 24 hours** (`service.MAX_REQUESTS_PER_DAY`). This is
+  the only endpoint in the app that spends money, and the limit is a business rule, so it lives in
+  the service, not in the rate limiter the rest of the app deliberately does not use. Deliberately
+  generous for a demo; tighten before it is real.
+- **Only the status line and the HTTP status code ever reach the user on a failure.** The Devin API
+  response body can echo the prompt back, and the prompt contains whatever the requester typed, so
+  `devin.py` raises `DevinDispatchError("Devin API returned <status>")` and nothing else. The API
+  key is read from settings at call time and is never rendered, logged or stored.
+- **`tools.request.admin` exists but is granted to nobody but `admin`** (which takes the whole
+  catalog). It is what lets someone see and retry another person's request; the requester
+  otherwise sees only their own, enforced in the router and covered by a test.
+- **`tools.request` went to the seeded `reviewer` role**, so the demo has a non-admin requester.
+  Which role really owns this is a customer decision.
+- **Session `title` is sent as well as `tags` and `max_acu_limit`.** Verified against the API
+  reference for `POST /v1/sessions` (response is `{session_id, url, is_new_session}`), not recalled.
+
+Flags for a security reviewer:
+
+- The brief is attacker-controlled text that ends up inside a prompt for an agent with repo access.
+  The prompt frames it as requirements from a requester, but prompt injection is not *solved* here:
+  the mitigations that matter are the ACU cap, the tag, the playbook, and the fact that a human
+  reviews and merges the PR. Do not remove the human merge step.
+- `ISSUE_TRACKER_NEW_ISSUE_URL` defaults to this repository's issue tracker. It is a link target
+  built into HTML, so point it at the customer's tracker before deploying; a wrong value leaks
+  page paths and usernames to whoever owns that URL.
+- Requests are readable by their requester and by `tools.request.admin`. They are business
+  requirements, not secrets, but they are not scrubbed either.
+
+Time: the module itself was quick (the generator plus the manifest contract from PR #7 meant no
+shared file needed editing except the one role grant). The two things that took longest were
+deciding the failure semantics above and confirming the API response shape.
+
+### Intake, second pass (review + browser findings)
+
+- **Two paid-session races were real.** Both are now closed in the database, not in Python:
+  `submit_request` takes a transaction-scoped `pg_advisory_xact_lock` keyed by requester before it
+  counts today's requests, and `dispatch_request` takes `SELECT ... FOR UPDATE` on the row before it
+  reads the status. Without those, concurrent submits all read `count - 1` and two clicks on
+  "Start the session" both reach the API and both spend ACUs. Postgres-specific on purpose; the app
+  is Postgres-only already.
+- **Slug validation now matches `bp new tool` exactly** (`^[a-z][a-z0-9_]{1,48}[a-z0-9]$`). The old
+  pattern accepted hyphens the generator rejects, so the failure landed inside a paid session.
+  `ToolRequestRead` relaxes the pattern so tightening it cannot make an older row unreadable.
+  `submit_request` also refuses a slug an installed tool already uses, since the generator will not
+  overwrite an existing module.
+- **Ownership is enforced in the service, not the route.** A denied dispatch now raises
+  `PermissionDeniedError` and returns no markup at all; before, the refusal rendered the foreign
+  request's id and status.
+- **A 2xx that is not JSON is a failed dispatch, not a 500.** Also rejects a non-object body.
+
+### Intake, third pass: ambiguous dispatch
+
+- **A timeout is not a failure.** The row lock stops two clicks racing, but it says nothing about a call that timed
+  out after Devin accepted it: the waiter would see `failed`, retry, and pay twice. Dispatch now commits a
+  `dispatching` claim *before* the HTTP call, and only `queued`/`failed` may be dispatched at all.
+- **Ambiguous outcomes stay claimed.** A transport error, a 5xx, or a 2xx this client cannot parse leaves the request
+  in `dispatching` with "a session may have been created; check Devin before starting another". There is no
+  idempotency key on `POST /v1/sessions`, so the only honest recovery is a human looking for the `tool:<slug>` tag;
+  the UI hides the retry button in that state rather than offering a second charge.
+- A 4xx (bad payload, bad key) is definitive, so it stays `failed` and retryable.
