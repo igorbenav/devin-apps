@@ -12,13 +12,13 @@
   </td>
   <td class="nowrap">
     {% if "process" in actions %}
-    <button class="button" hx-post="/tools/refunds/{{ refund.id }}/process" hx-vals='{"view": "row"}'
+    <button class="button" hx-post="/tools/refunds/{{ refund.id }}/process"
+            hx-vals='{"view": "board", "state": "{{ state }}"}'
             hx-confirm="Mark refund #{{ refund.id }} as paid out? This cannot be undone."
-            hx-target="#refunds-request-{{ refund.id }}" hx-swap="outerHTML">Mark paid out</button>
+            hx-target="#refunds-board" hx-swap="innerHTML">Mark paid out</button>
     {% endif %}
     {% if "approve" in actions or "reject" in actions %}
     <a class="button button-quiet" href="/tools/refunds/{{ refund.id }}">Decide</a>
     {% endif %}
-    {% if error %}<p class="error small">{{ error }}</p>{% endif %}
   </td>
 </tr>

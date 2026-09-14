@@ -69,7 +69,7 @@
   </thead>
   <tbody id="refunds-rows">
     {% for refund in refunds %}
-    {% with actions = actions_by_refund[refund.id], error = None %}
+    {% with actions = actions_by_refund[refund.id] %}
     {% include "refunds/_row.html" %}
     {% endwith %}
     {% else %}

@@ -81,33 +81,22 @@ async def _detail_context(
     }
 
 
-async def _row_context(
-    db: AsyncSessionDep,
-    viewer: ViewerContext,
-    refund_id: int,
-    error: str | None = None,
-) -> dict[str, Any]:
-    refund = await service.get_refund(db, refund_id)
-    return {
-        "refund": refund,
-        "usernames": await service.usernames_for(db, [refund]),
-        "actions": service.allowed_actions(refund, viewer.user, viewer.permissions),
-        "error": error,
-    }
-
-
 async def _respond(
     request: Request,
     db: AsyncSessionDep,
     viewer: ViewerContext,
     refund_id: int,
     view: str,
+    state: str,
     transition: Transition,
 ) -> Any:
     """Run a transition and re-render the caller's partial, error or not.
 
     HTMX only swaps 2xx responses, so a refusal comes back as the same partial with the reason in it rather than a
     status code the page cannot show.
+
+    A transition moves a refund between states, which moves the counts and can drop it out of the filter the table is
+    showing, so the dashboard is re-rendered whole rather than row by row.
     """
     error: str | None = None
     try:
@@ -117,8 +106,10 @@ async def _respond(
     except DomainError as exc:
         error = str(exc)
 
-    if view == "row":
-        return render(request, "refunds/_row.html", viewer=viewer, context=await _row_context(db, viewer, refund_id, error))
+    if view == "board":
+        return render(
+            request, "refunds/_board.html", viewer=viewer, context=await _board_context(db, viewer, state, error=error)
+        )
     return render(request, "refunds/_detail.html", viewer=viewer, context=await _detail_context(db, viewer, refund_id, error))
 
 
@@ -186,6 +177,7 @@ async def approve(
     refund_id: int,
     reason: Annotated[str, Form()] = "",
     view: Annotated[str, Form()] = "detail",
+    state: Annotated[str, Form()] = service.FILTER_ALL,
 ) -> Any:
     """HTMX action: approve a requested refund, with the reason that approval needs."""
     return await _respond(
@@ -194,6 +186,7 @@ async def approve(
         viewer,
         refund_id,
         view,
+        state,
         lambda: service.approve_refund(db, viewer.user, viewer.permissions, refund_id, reason),
     )
 
@@ -206,6 +199,7 @@ async def reject(
     refund_id: int,
     reason: Annotated[str, Form()] = "",
     view: Annotated[str, Form()] = "detail",
+    state: Annotated[str, Form()] = service.FILTER_ALL,
 ) -> Any:
     """HTMX action: reject a requested refund, which is the end of it."""
     return await _respond(
@@ -214,6 +208,7 @@ async def reject(
         viewer,
         refund_id,
         view,
+        state,
         lambda: service.reject_refund(db, viewer.user, viewer.permissions, refund_id, reason),
     )
 
@@ -224,7 +219,8 @@ async def process(
     db: AsyncSessionDep,
     viewer: ViewerDep,
     refund_id: int,
-    view: Annotated[str, Form()] = "row",
+    view: Annotated[str, Form()] = "board",
+    state: Annotated[str, Form()] = service.FILTER_ALL,
 ) -> Any:
     """HTMX action: mark an approved refund as paid out."""
     return await _respond(
@@ -233,5 +229,6 @@ async def process(
         viewer,
         refund_id,
         view,
+        state,
         lambda: service.process_refund(db, viewer.user, viewer.permissions, refund_id),
     )
