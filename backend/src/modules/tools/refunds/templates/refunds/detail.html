@@ -1,0 +1,10 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Refund #{{ refund.id }} — Internal Tools{% endblock %}
+
+{% block content %}
+<h1>Refund #{{ refund.id }}</h1>
+<p><a href="/tools/refunds">Back to the dashboard</a></p>
+
+{% include "refunds/_detail.html" %}
+{% endblock %}

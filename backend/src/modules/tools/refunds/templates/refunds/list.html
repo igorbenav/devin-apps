@@ -1,0 +1,15 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Refunds — Internal Tools{% endblock %}
+
+{% block content %}
+<h1>Refunds</h1>
+<p class="muted small">
+  Refund requests raised by support. A team lead approves or rejects them; an agent marks an approved refund as paid
+  out. Every decision carries a reason and shows up on the refund's audit trail.
+</p>
+
+<div id="refunds-board">
+  {% include "refunds/_board.html" %}
+</div>
+{% endblock %}
