@@ -27,12 +27,24 @@ ROLE_ANALYST: Final = "analyst"
 ROLE_REVIEWER: Final = "reviewer"
 ROLE_ADMIN: Final = "admin"
 
-ANALYST_GRANTS: Final[tuple[str, ...]] = ("kyc.review", "flags.read")
-REVIEWER_GRANTS: Final[tuple[str, ...]] = (*ANALYST_GRANTS, "kyc.approve", "kyc.escalate", "tools.request")
+ANALYST_GRANTS: Final[tuple[str, ...]] = (
+    "kyc.review",
+    "flags.read",
+    "refunds.view",
+    "refunds.request",
+    "refunds.process",
+)
+REVIEWER_GRANTS: Final[tuple[str, ...]] = (
+    *ANALYST_GRANTS,
+    "kyc.approve",
+    "kyc.escalate",
+    "tools.request",
+    "refunds.approve",
+)
 
 ROLE_GRANTS: Final[dict[str, tuple[str, tuple[str, ...]]]] = {
-    ROLE_ANALYST: ("Reviews KYC cases and reads risk flags", ANALYST_GRANTS),
-    ROLE_REVIEWER: ("Approves and escalates KYC cases", REVIEWER_GRANTS),
+    ROLE_ANALYST: ("Reviews KYC cases, raises and pays out refunds, reads risk flags", ANALYST_GRANTS),
+    ROLE_REVIEWER: ("Approves and escalates KYC cases, decides refunds", REVIEWER_GRANTS),
     ROLE_ADMIN: ("Full platform access, including the audit log", ()),
 }
 

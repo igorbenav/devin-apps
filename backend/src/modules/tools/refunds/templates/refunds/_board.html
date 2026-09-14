@@ -1,0 +1,79 @@
+{% if flash %}<p class="flash small">{{ flash }}</p>{% endif %}
+
+<div class="cards">
+  <div class="card">
+    <p class="muted small">Requested</p>
+    <h2>{{ counts.requested }}</h2>
+    <p class="muted small">Waiting on a decision</p>
+  </div>
+  <div class="card">
+    <p class="muted small">Approved, not paid out</p>
+    <h2>{{ counts.awaiting_payout }}</h2>
+    <p class="muted small">Outstanding money</p>
+  </div>
+  <div class="card">
+    <p class="muted small">Processed this week</p>
+    <h2>{{ counts.processed_this_week }}</h2>
+    <p class="muted small">Paid out in the last 7 days</p>
+  </div>
+</div>
+
+{% if error %}<p class="error small">{{ error }}</p>{% endif %}
+
+{% if can_request %}
+<form class="card brief-form" hx-post="/tools/refunds" hx-target="#refunds-board" hx-swap="innerHTML">
+  <input type="hidden" name="state" value="{{ state }}">
+
+  <label for="customer_ref">Customer reference</label>
+  <input id="customer_ref" name="customer_ref" maxlength="64" value="{{ answers.get('customer_ref', '') }}"
+         placeholder="CUS-4821" required>
+
+  <label for="order_ref">Order reference</label>
+  <input id="order_ref" name="order_ref" maxlength="64" value="{{ answers.get('order_ref', '') }}"
+         placeholder="ORD-90114" required>
+
+  <label for="amount">Amount</label>
+  <input id="amount" name="amount" inputmode="decimal" value="{{ answers.get('amount', '') }}"
+         placeholder="249.90" required>
+
+  <label for="currency">Currency</label>
+  <input id="currency" name="currency" maxlength="3" value="{{ answers.get('currency', '') }}"
+         placeholder="EUR" pattern="[A-Za-z]{3}" title="Three-letter currency code, e.g. EUR" required>
+
+  <label for="reason">Why the customer is owed this</label>
+  <textarea id="reason" name="reason" rows="3" minlength="10" maxlength="2000"
+            placeholder="Duplicate charge on the same order, confirmed with the customer" required>{{ answers.get('reason', '') }}</textarea>
+
+  <button type="submit">Request refund</button>
+</form>
+{% endif %}
+
+<nav class="tabs">
+  {% for name, label in state_filters %}
+  <a class="tab {% if name == state %}tab-active{% endif %}" href="/tools/refunds?state={{ name }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Refund</th>
+      <th>Customer</th>
+      <th>Order</th>
+      <th>Amount</th>
+      <th>State</th>
+      <th>Requested by</th>
+      <th>Decided by</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="refunds-rows">
+    {% for refund in refunds %}
+    {% with actions = actions_by_refund[refund.id] %}
+    {% include "refunds/_row.html" %}
+    {% endwith %}
+    {% else %}
+    <tr><td colspan="8" class="empty">No refunds in this view.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
